@@ -1,0 +1,46 @@
+{
+  "main": {
+    "name": "pentagotchi",
+    "lang": "ru",
+    "whitelist": [
+      "MyHomeWiFi",
+      "MyPhoneHotspot",
+      "AA:BB:CC:DD:EE:FF"
+    ],
+    "plugins": {
+      "grid": { "enabled": false },
+      "gps": { "enabled": true }
+    }
+  },
+
+  "ui": {
+    "fps": 1,
+    "display": {
+      "enabled": true,
+      "rotation": 0,
+      "type": "weact_213",
+      "color": "black"
+    },
+    "web": {
+      "enabled": false,
+      "address": "0.0.0.0",
+      "username": "admin",
+      "password": "my_secure_password",
+      "port": 8080
+    }
+  },
+
+  "ai": {
+    "enabled": false,
+    "laziness": 0.5,
+    "epochs_per_episode": 1,
+    "min_rssi": -75
+  },
+
+  "pwny": {
+    "handshakes": "/sdcard/handshakes",
+    "silence": [],
+    "deauth_enabled": false,
+    "channel_hop_ms": 300
+  }
+}
