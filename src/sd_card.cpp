@@ -2,6 +2,7 @@
  * sd_card.c — монтирование SD через SPI (esp-idf sdspi driver)
  */
 
+#include <cstring>
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
 #include "driver/sdspi_host.h"
@@ -17,18 +18,17 @@ static bool s_initialized = false;
 
 esp_err_t sd_card_init(void)
 {
-    esp_vfs_fat_sdmmc_mount_config_t mount_config = {
-        .format_if_mount_failed = false,
-        .max_files = 5,
-        .allocation_unit_size = 16 * 1024,
-    };
+    esp_vfs_fat_sdmmc_mount_config_t mount_config = {};
+    mount_config.format_if_mount_failed = false;
+    mount_config.max_files = 5;
+    mount_config.allocation_unit_size = 16 * 1024;
 
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
     host.slot = SPI2_HOST; // тот же SPI host, что у e-ink — шина общая
 
     sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
     slot_config.gpio_cs = PIN_SD_CS;
-    slot_config.host_id = host.slot;
+    slot_config.host_id = (spi_host_device_t)host.slot;
 
     esp_err_t ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config,
                                              &mount_config, &s_card);
@@ -60,18 +60,13 @@ esp_err_t sd_card_get_info(sd_card_info_t *info)
         uint64_t card_size = ((uint64_t) s_card->csd.capacity) * s_card->csd.sector_size;
         info->size_mb = (uint32_t)(card_size / (1024 * 1024));
         
-        // Тип карты
-        switch (s_card->ocr & SD_OCR_SDHC_CAP) {
-            case SD_OCR_SDHC_CAP:
-                if (s_card->ocr & SD_OCR_XC_CAP) {
-                    strncpy(info->type_name, "SDXC", sizeof(info->type_name) - 1);
-                } else {
-                    strncpy(info->type_name, "SDHC", sizeof(info->type_name) - 1);
-                }
-                break;
-            default:
-                strncpy(info->type_name, "SDSC", sizeof(info->type_name) - 1);
-                break;
+        // Тип карты (определяем по размеру)
+        if (card_size > (uint64_t)32 * 1024 * 1024 * 1024) { // > 32GB
+            strncpy(info->type_name, "SDXC", sizeof(info->type_name) - 1);
+        } else if (card_size > (uint64_t)2 * 1024 * 1024 * 1024) { // > 2GB
+            strncpy(info->type_name, "SDHC", sizeof(info->type_name) - 1);
+        } else {
+            strncpy(info->type_name, "SDSC", sizeof(info->type_name) - 1);
         }
         info->type_name[sizeof(info->type_name) - 1] = '\0';
     } else {

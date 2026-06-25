@@ -16,6 +16,7 @@
 #include "esp_log.h"
 #include "esp_wifi.h"
 #include "esp_timer.h"
+#include "esp_mac.h"
 #include "handshake_capture.h"
 #include "pcap_writer.h"
 

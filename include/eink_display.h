@@ -16,7 +16,8 @@
 // Размеры дисплея WeAct 2.13"
 #define EINK_WIDTH  250
 #define EINK_HEIGHT 122
-#define EINK_BUFFER_SIZE ((EINK_WIDTH * EINK_HEIGHT) / 8)
+#define EINK_BYTES_PER_ROW ((EINK_WIDTH + 7) / 8)
+#define EINK_BUFFER_SIZE (EINK_BYTES_PER_ROW * EINK_HEIGHT)
 
 // Команды SSD1680
 #define SSD1680_SW_RESET                    0x12

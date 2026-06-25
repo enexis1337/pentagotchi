@@ -1,0 +1,83 @@
+src/eink_display.cpp:37:5: error: either all initializer clauses should be designated or none of them should be
+   37 |     [33] = {0x1C, 0x36, 0x63, 0x7F, 0x63, 0x63, 0x63, 0x00}, // A
+      |     ^
+src/eink_display.cpp:39:1: sorry, unimplemented: non-trivial designated initializers not supported
+   39 | };
+      | ^
+src/eink_display.cpp: In function 'esp_err_t eink_spi_write_cmd(uint8_t)':
+src/eink_display.cpp:57:5: error: missing initializer for member 'spi_transaction_t::flags' [-Werror=missing-field-initializers]
+   57 |     };
+      |     ^
+src/eink_display.cpp:57:5: error: missing initializer for member 'spi_transaction_t::cmd' [-Werror=missing-field-initializers]
+src/eink_display.cpp:57:5: error: missing initializer for member 'spi_transaction_t::addr' [-Werror=missing-field-initializers]
+src/eink_display.cpp:57:5: error: missing initializer for member 'spi_transaction_t::rxlength' [-Werror=missing-field-initializers]
+src/eink_display.cpp:57:5: error: missing initializer for member 'spi_transaction_t::override_freq_hz' [-Werror=missing-field-initializers]
+src/eink_display.cpp:57:5: error: missing initializer for member 'spi_transaction_t::user' [-Werror=missing-field-initializers]
+src/eink_display.cpp:57:5: error: missing initializer for member 'spi_transaction_t::<anonymous>' [-Werror=missing-field-initializers]
+src/eink_display.cpp: In function 'esp_err_t eink_spi_write_data(const uint8_t*, size_t)':
+src/eink_display.cpp:69:5: error: missing initializer for member 'spi_transaction_t::flags' [-Werror=missing-field-initializers]
+   69 |     };
+      |     ^
+src/eink_display.cpp:69:5: error: missing initializer for member 'spi_transaction_t::cmd' [-Werror=missing-field-initializers]
+src/eink_display.cpp:69:5: error: missing initializer for member 'spi_transaction_t::addr' [-Werror=missing-field-initializers]
+src/eink_display.cpp:69:5: error: missing initializer for member 'spi_transaction_t::rxlength' [-Werror=missing-field-initializers]
+src/eink_display.cpp:69:5: error: missing initializer for member 'spi_transaction_t::override_freq_hz' [-Werror=missing-field-initializers]
+src/eink_display.cpp:69:5: error: missing initializer for member 'spi_transaction_t::user' [-Werror=missing-field-initializers]
+src/eink_display.cpp:69:5: error: missing initializer for member 'spi_transaction_t::<anonymous>' [-Werror=missing-field-initializers]
+src/eink_display.cpp: In function 'esp_err_t eink_init()':
+src/eink_display.cpp:169:5: error: missing initializer for member 'gpio_config_t::pin_bit_mask' [-Werror=missing-field-initializers]
+  169 |     };
+      |     ^
+src/eink_display.cpp:169:5: error: missing initializer for member 'gpio_config_t::mode' [-Werror=missing-field-initializers]
+src/eink_display.cpp:169:5: error: missing initializer for member 'gpio_config_t::pull_up_en' [-Werror=missing-field-initializers]
+src/eink_display.cpp:169:5: error: missing initializer for member 'gpio_config_t::pull_down_en' [-Werror=missing-field-initializers]
+src/eink_display.cpp:169:5: error: designator order for field 'gpio_config_t::mode' does not match declaration order in 'gpio_config_t'
+src/eink_display.cpp:175:26: error: invalid conversion from 'int' to 'gpio_pullup_t' [-fpermissive]
+  175 |     io_conf.pull_up_en = 1;
+      |                          ^
+      |                          |
+      |                          int
+src/eink_display.cpp:186:5: error: missing initializer for member 'spi_bus_config_t::<unnamed union>::<unnamed struct>::<anonymous>' [-Werror=missing-field-initializers]
+  186 |     };
+      |     ^
+src/eink_display.cpp:186:5: error: missing initializer for member 'spi_bus_config_t::<unnamed union>::<unnamed struct>::sclk_io_num' [-Werror=missing-field-initializers]
+src/eink_display.cpp:186:5: error: missing initializer for member 'spi_bus_config_t::<unnamed union>::<unnamed struct>::<anonymous>' [-Werror=missing-field-initializers]
+src/eink_display.cpp:186:5: error: missing initializer for member 'spi_bus_config_t::<unnamed union>::<unnamed struct>::<anonymous>' [-Werror=missing-field-initializers]
+src/eink_display.cpp:186:5: error: missing initializer for member 'spi_bus_config_t::<unnamed union>::<unnamed struct>::data4_io_num' [-Werror=missing-field-initializers]
+src/eink_display.cpp:186:5: error: missing initializer for member 'spi_bus_config_t::<unnamed union>::<unnamed struct>::data5_io_num' [-Werror=missing-field-initializers]
+src/eink_display.cpp:186:5: error: missing initializer for member 'spi_bus_config_t::<unnamed union>::<unnamed struct>::data6_io_num' [-Werror=missing-field-initializers]
+src/eink_display.cpp:186:5: error: missing initializer for member 'spi_bus_config_t::<unnamed union>::<unnamed struct>::data7_io_num' [-Werror=missing-field-initializers]
+src/eink_display.cpp:186:5: error: designator order for field 'spi_bus_config_t::<unnamed union>::<unnamed struct>::<anonymous>' does not match declaration order in 'spi_bus_config_t::<unnamed union>::<unnamed struct>'
+src/eink_display.cpp:186:5: error: missing initializer for member 'spi_bus_config_t::data_io_default_level' [-Werror=missing-field-initializers]
+src/eink_display.cpp:186:5: error: missing initializer for member 'spi_bus_config_t::flags' [-Werror=missing-field-initializers]
+src/eink_display.cpp:186:5: error: missing initializer for member 'spi_bus_config_t::isr_cpu_id' [-Werror=missing-field-initializers]
+src/eink_display.cpp:186:5: error: missing initializer for member 'spi_bus_config_t::intr_flags' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::command_bits' [-Werror=missing-field-initializers]
+  201 |     };
+      |     ^
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::address_bits' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::dummy_bits' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::mode' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::clock_source' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::duty_cycle_pos' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::cs_ena_pretrans' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::cs_ena_posttrans' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::input_delay_ns' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::sample_point' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::spics_io_num' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::flags' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::queue_size' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::pre_cb' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: missing initializer for member 'spi_device_interface_config_t::post_cb' [-Werror=missing-field-initializers]
+src/eink_display.cpp:201:5: error: designator order for field 'spi_device_interface_config_t::mode' does not match declaration order in 'spi_device_interface_config_t'
+cc1plus: all warnings being treated as errors
+*** [.pio/build/esp32-s3/src/eink_display.cpp.o] Error 1
+Preprocessing linker script .pio/build/esp32-s3/memory.ld
+src/main.cpp: In function 'void app_main()':
+src/main.cpp:74:30: error: missing initializer for member 'eink_status_t::sd_size_mb' [-Werror=missing-field-initializers]
+   74 |     eink_status_t status = {0};
+      |                              ^
+src/main.cpp:74:30: error: missing initializer for member 'eink_status_t::display_initialized' [-Werror=missing-field-initializers]
+src/main.cpp:74:30: error: missing initializer for member 'eink_status_t::device_name' [-Werror=missing-field-initializers]
+cc1plus: all warnings being treated as errors
+*** [.pio/build/esp32-s3/src/main.cpp.o] Error 1

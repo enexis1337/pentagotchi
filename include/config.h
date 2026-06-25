@@ -13,6 +13,10 @@
 #include <stdbool.h>
 #include "esp_err.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define CONFIG_MAX_WHITELIST        32
 #define CONFIG_MAX_SILENCE_CHANNELS 16
 #define CONFIG_MAX_PLUGINS          16
@@ -79,6 +83,13 @@ typedef struct {
 } cfg_ai_t;
 
 // ============================================================
+// [debug] — отладочные флаги
+// ============================================================
+typedef struct {
+    bool serial_enabled;                 // debug.serial.enabled — логи в UART
+} cfg_debug_t;
+
+// ============================================================
 // [pwny] — наш движок захвата (аналог bettercap-части у pwnagotchi)
 // ============================================================
 typedef struct {
@@ -95,10 +106,11 @@ typedef struct {
 // Главная структура — объединяет все секции
 // ============================================================
 typedef struct {
-    cfg_main_t main;
-    cfg_ui_t   ui;
-    cfg_ai_t   ai;
-    cfg_pwny_t pwny;
+    cfg_main_t  main;
+    cfg_ui_t    ui;
+    cfg_ai_t    ai;
+    cfg_debug_t debug;
+    cfg_pwny_t  pwny;
 } pwny_config_t;
 
 /**
@@ -134,3 +146,7 @@ bool config_is_channel_silenced(const pwny_config_t *config, uint8_t channel);
  * Если плагин не упомянут в конфиге — возвращает false (выключен по умолчанию).
  */
 bool config_is_plugin_enabled(const pwny_config_t *config, const char *plugin_name);
+
+#ifdef __cplusplus
+}
+#endif

@@ -51,14 +51,13 @@ int wifi_scanner_scan(ap_info_t *out_aps, int max_count)
         return -1;
     }
 
-    wifi_scan_config_t scan_config = {
-        .ssid = NULL,
-        .bssid = NULL,
-        .channel = 0,        // 0 = все каналы
-        .show_hidden = true,
-        .scan_type = WIFI_SCAN_TYPE_PASSIVE,
-        .scan_time.passive = 200,  // мс на канал
-    };
+    wifi_scan_config_t scan_config = {};
+    scan_config.ssid = NULL;
+    scan_config.bssid = NULL;
+    scan_config.channel = 0;        // 0 = все каналы
+    scan_config.show_hidden = true;
+    scan_config.scan_type = WIFI_SCAN_TYPE_PASSIVE;
+    scan_config.scan_time.passive = 200;  // мс на канал
 
     esp_err_t ret = esp_wifi_scan_start(&scan_config, true /* blocking */);
     if (ret != ESP_OK) {
@@ -74,7 +73,7 @@ int wifi_scanner_scan(ap_info_t *out_aps, int max_count)
         return 0;
     }
 
-    wifi_ap_record_t *ap_records = calloc(ap_count, sizeof(wifi_ap_record_t));
+    wifi_ap_record_t *ap_records = (wifi_ap_record_t *)calloc(ap_count, sizeof(wifi_ap_record_t));
     if (!ap_records) {
         ESP_LOGE(TAG, "OOM allocating ap_records");
         return -1;

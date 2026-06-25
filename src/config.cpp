@@ -14,6 +14,8 @@
 #include <ArduinoJson.h>
 #include "config.h"
 
+extern "C" {
+
 static const char *TAG = "config";
 #define CONFIG_PATH "/sdcard/config.json"
 
@@ -49,6 +51,9 @@ static void config_set_defaults(pwny_config_t *cfg)
     cfg->ai.laziness = 0.5f;
     cfg->ai.epochs_per_episode = 1;
     cfg->ai.min_rssi = -75;
+
+    // [debug]
+    cfg->debug.serial_enabled = true;
 
     // [pwny]
     strncpy(cfg->pwny.handshakes_path, "/sdcard/handshakes", CONFIG_STR_LEN_PATH - 1);
@@ -203,6 +208,20 @@ static void parse_ai_section(JsonObjectConst root, cfg_ai_t *out)
     }
 }
 
+// ---------- Парсинг секции [debug] ----------
+static void parse_debug_section(JsonObjectConst root, cfg_debug_t *out)
+{
+    JsonObjectConst debug_sec = root["debug"];
+    if (debug_sec.isNull()) return;
+
+    if (debug_sec["serial"].is<JsonObjectConst>()) {
+        JsonObjectConst serial = debug_sec["serial"];
+        if (serial["enabled"].is<bool>()) {
+            out->serial_enabled = serial["enabled"];
+        }
+    }
+}
+
 // ---------- Парсинг секции [pwny] ----------
 static void parse_pwny_section(JsonObjectConst root, cfg_pwny_t *out)
 {
@@ -273,15 +292,17 @@ esp_err_t config_load(pwny_config_t *out_config)
     parse_main_section(root, &out_config->main);
     parse_ui_section(root, &out_config->ui);
     parse_ai_section(root, &out_config->ai);
+    parse_debug_section(root, &out_config->debug);
     parse_pwny_section(root, &out_config->pwny);
 
     ESP_LOGI(TAG, "Config loaded: name='%s' lang='%s' whitelist=%d plugins=%d "
-                  "display=%s(%s) web=%s ai=%s deauth=%s",
+                  "display=%s(%s) web=%s ai=%s debug_serial=%s deauth=%s",
              out_config->main.name, out_config->main.lang,
              out_config->main.whitelist_count, out_config->main.plugin_count,
              out_config->ui.display.enabled ? "on" : "off", out_config->ui.display.type,
              out_config->ui.web.enabled ? "on" : "off",
              out_config->ai.enabled ? "on" : "off",
+             out_config->debug.serial_enabled ? "on" : "off",
              out_config->pwny.deauth_enabled ? "on" : "off");
 
     return ESP_OK;
@@ -333,6 +354,11 @@ esp_err_t config_save(const pwny_config_t *config)
     ai_sec["epochs_per_episode"] = config->ai.epochs_per_episode;
     ai_sec["min_rssi"] = config->ai.min_rssi;
 
+    // ---------- [debug] ----------
+    JsonObject debug_sec = root["debug"].to<JsonObject>();
+    JsonObject serial = debug_sec["serial"].to<JsonObject>();
+    serial["enabled"] = config->debug.serial_enabled;
+
     // ---------- [pwny] ----------
     JsonObject pwny_sec = root["pwny"].to<JsonObject>();
     pwny_sec["handshakes"] = config->pwny.handshakes_path;
@@ -353,7 +379,16 @@ esp_err_t config_save(const pwny_config_t *config)
     }
 
     // Сериализация с красивым форматированием
-    if (serializeJsonPretty(doc, f) == 0) {
+    // ArduinoJson v7 не поддерживает FILE* напрямую, используем буфер
+    char buffer[4096];
+    size_t n = serializeJsonPretty(doc, buffer, sizeof(buffer));
+    if (n == 0 || n >= sizeof(buffer)) {
+        fclose(f);
+        ESP_LOGE(TAG, "Failed to serialize config (buffer too small or error)");
+        return ESP_FAIL;
+    }
+    
+    if (fwrite(buffer, 1, n, f) != n) {
         fclose(f);
         ESP_LOGE(TAG, "Failed to write config to file");
         return ESP_FAIL;
@@ -408,3 +443,5 @@ bool config_is_plugin_enabled(const pwny_config_t *config, const char *plugin_na
     }
     return false; // плагин не упомянут в конфиге -> выключен
 }
+
+} // extern "C"

@@ -5,7 +5,7 @@
 # Заголовки из ../include/ нужно прописать отдельно ниже.
 # ============================================================
 
-file(GLOB_RECURSE app_sources ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
+file(GLOB_RECURSE app_sources ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
 idf_component_register(
     SRCS ${app_sources}
@@ -21,5 +21,4 @@ idf_component_register(
         fatfs
         sdmmc
         driver
-        json         # cJSON library
 )
