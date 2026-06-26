@@ -48,7 +48,7 @@ typedef struct {
 // ============================================================
 typedef struct {
     bool enabled;                       // ui.display.enabled
-    uint8_t rotation;                   // ui.display.rotation (0/90/180/270)
+    char orientation[8];                // ui.display.orientation ("left"/"right")
     char type[CONFIG_STR_LEN_SHORT];    // ui.display.type ("weact_213" у нас)
     char color[16];                     // ui.display.color ("black"/"red"...)
 } cfg_ui_display_t;

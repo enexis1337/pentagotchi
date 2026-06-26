@@ -35,7 +35,7 @@ static void config_set_defaults(pwny_config_t *cfg)
 
     // [ui.display]
     cfg->ui.display.enabled = true;
-    cfg->ui.display.rotation = 0;
+    strncpy(cfg->ui.display.orientation, "left", sizeof(cfg->ui.display.orientation) - 1);
     strncpy(cfg->ui.display.type, "weact_213", CONFIG_STR_LEN_SHORT - 1);
     strncpy(cfg->ui.display.color, "black", sizeof(cfg->ui.display.color) - 1);
 
@@ -142,8 +142,9 @@ static void parse_ui_section(JsonObjectConst root, cfg_ui_t *out)
             out->display.enabled = display["enabled"];
         }
 
-        if (display["rotation"].is<int>()) {
-            out->display.rotation = (uint8_t)display["rotation"].as<int>();
+        const char *orient = display["orientation"];
+        if (orient) {
+            strncpy(out->display.orientation, orient, sizeof(out->display.orientation) - 1);
         }
 
         const char *type = display["type"];
@@ -336,7 +337,7 @@ esp_err_t config_save(const pwny_config_t *config)
 
     JsonObject display = ui_sec["display"].to<JsonObject>();
     display["enabled"] = config->ui.display.enabled;
-    display["rotation"] = config->ui.display.rotation;
+    display["orientation"] = config->ui.display.orientation;
     display["type"] = config->ui.display.type;
     display["color"] = config->ui.display.color;
 

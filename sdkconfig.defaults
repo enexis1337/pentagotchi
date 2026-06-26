@@ -21,3 +21,6 @@ CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 
 # --- Основной стек ---
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
+
+# --- C++ exceptions: использует ArduinoJson внутри ---
+CONFIG_COMPILER_CXX_EXCEPTIONS=y

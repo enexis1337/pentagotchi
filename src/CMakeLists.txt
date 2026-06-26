@@ -8,10 +8,13 @@
 file(GLOB_RECURSE app_sources ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
 idf_component_register(
-    SRCS ${app_sources}
+    SRCS ${app_sources} "lib_ssd1680/lib_ssd1680.cpp"
     INCLUDE_DIRS
         "."
         "../include"
+        "lib_ssd1680/include"
+        "lib_ssd1680/include/fonts"
+        "lib_ssd1680/include/bitmaps"
     REQUIRES
         nvs_flash
         esp_wifi
@@ -21,4 +24,6 @@ idf_component_register(
         fatfs
         sdmmc
         driver
+        arduinojson
+        u8g2
 )

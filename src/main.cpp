@@ -93,6 +93,13 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, "Loading config...");
     config_load(&s_config);
 
+    // Apply display orientation from config
+    if (status.display_initialized && s_config.ui.display.enabled) {
+        int rot = (strcmp(s_config.ui.display.orientation, "right") == 0) ? 180 : 0;
+        eink_set_rotation(rot);
+        eink_show_boot_status(&status);
+    }
+
     ESP_LOGI(TAG, "Device name: '%s' | lang: %s | AI: %s | web UI: %s | display: %s",
              s_config.main.name, s_config.main.lang,
              s_config.ai.enabled ? "ON (learning)" : "OFF (AUTO mode)",
