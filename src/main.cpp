@@ -57,7 +57,7 @@ extern "C" void app_main(void)
         ESP_LOGI(TAG, "Serial debug enabled");
     }
 
-    // --- 1. E-ink display init ---
+    // --- 1. E-ink display init (ПЕРВЫМ - инициализирует SPI шину) ---
     ESP_LOGI(TAG, "Initializing E-ink display...");
     esp_err_t eink_ret = eink_init();
 
@@ -66,7 +66,7 @@ extern "C" void app_main(void)
     status.display_initialized = (eink_ret == ESP_OK);
     strncpy(status.device_name, "pentagotchi", sizeof(status.device_name) - 1);
 
-    // --- 2. SD card ---
+    // --- 2. SD card (ВТОРЫМ - использует уже инициализированную SPI) ---
     ESP_LOGI(TAG, "Mounting SD card...");
     esp_err_t sd_ret = sd_card_init();
 

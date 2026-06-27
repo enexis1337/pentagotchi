@@ -1,1 +1,0 @@
-esp32-ssd1680-driver from https://github.com/DECE2183/esp32-ssd1680-driver

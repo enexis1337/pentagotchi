@@ -1352,7 +1352,6 @@ CONFIG_RMT_OBJ_CACHE_SAFE=y
 #
 # ESP-Driver:SPI Configurations
 #
-# default:
 CONFIG_SPI_MASTER_ISR_IN_IRAM=y
 # default:
 # CONFIG_SPI_SLAVE_IN_IRAM is not set

@@ -79,20 +79,19 @@ static void ssd1680_write(ssd1680_t *disp, ssd1680_regmap_t cmd, void *data, siz
     trs.length = 8;
     trs.tx_buffer = &cmd;
     gpio_set_level(disp->pinmap.dc, 0);
-    gpio_set_level(disp->pinmap.cs, 0);
+    // CS управляется автоматически SPI драйвером
     spi_device_polling_transmit(disp->spi_device, &trs);
 
     gpio_set_level(disp->pinmap.dc, 1);
     if (data == NULL || data_size == 0)
     {
-    	gpio_set_level(disp->pinmap.cs, 1);
     	return;
     }
 
     trs.length = data_size * 8;
     trs.tx_buffer = data;
     spi_device_polling_transmit(disp->spi_device, &trs);
-    gpio_set_level(disp->pinmap.cs, 1);
+    // CS управляется автоматически SPI драйвером
 }
 
 
@@ -109,7 +108,7 @@ static void ssd1680_read(ssd1680_t *disp, ssd1680_regmap_t cmd, void *data, size
     trs.tx_buffer = &cmd_in_ram;
     trs.rx_buffer = NULL;
     gpio_set_level(disp->pinmap.dc, 0);
-    gpio_set_level(disp->pinmap.cs, 0);
+    // CS управляется автоматически SPI драйвером
     spi_device_polling_transmit(disp->spi_device, &trs);
 
     trs.length = (data_size + 1) * 8;
@@ -118,7 +117,7 @@ static void ssd1680_read(ssd1680_t *disp, ssd1680_regmap_t cmd, void *data, size
     trs.rx_buffer = fb_tmp;
     gpio_set_level(disp->pinmap.dc, 1);
     spi_device_polling_transmit(disp->spi_device, &trs);
-    gpio_set_level(disp->pinmap.cs, 1);
+    // CS управляется автоматически SPI драйвером
 
     memcpy(data, fb_tmp + 1, data_size );
     free(fb_tmp);
@@ -338,7 +337,7 @@ ssd1680_t *ssd1680_init(spi_host_device_t spi_host, ssd1680_pinmap_t pinmap, uin
     memset(&devcfg, 0, sizeof(devcfg));
     devcfg.mode = 0;
     devcfg.clock_speed_hz = SPI_MASTER_FREQ_1M;
-    devcfg.spics_io_num = -1;
+    devcfg.spics_io_num = pinmap.cs; // Автоматическое управление CS
     devcfg.queue_size = 3;
 
     esp_err_t err = spi_bus_add_device(spi_host, &devcfg, &disp->spi_device);
