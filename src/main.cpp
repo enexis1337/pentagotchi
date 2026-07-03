@@ -4,6 +4,8 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "driver/gpio.h"
+#include "driver/spi_master.h"
 
 #include "eink_display.h"
 #include "pwn_ui.h"
@@ -12,6 +14,7 @@
 #include "wifi_scanner.h"
 #include "handshake_capture.h"
 #include "pcap_writer.h"
+#include "pins.h"
 
 static const char *TAG = "main";
 
@@ -100,15 +103,22 @@ extern "C" void app_main(void)
         ESP_LOGI(TAG, "Serial debug enabled");
     }
 
-    // --- 1. E-ink display init (ПЕРВЫМ - инициализирует SPI шину!) ---
-    ESP_LOGI(TAG, "Initializing E-ink display...");
-    eink_init();
-    eink_init_partial();
-    
-    // Небольшая задержка после E-ink для стабилизации SPI шины
-    vTaskDelay(pdMS_TO_TICKS(200));
+    // --- 0. Init shared SPI bus (both SD + E-ink use SPI2_HOST) ---
+    ESP_LOGI(TAG, "Initializing shared SPI bus...");
+    spi_bus_config_t buscfg = {};
+    buscfg.miso_io_num = PIN_SPI_MISO;
+    buscfg.mosi_io_num = PIN_SPI_MOSI;
+    buscfg.sclk_io_num = PIN_SPI_SCK;
+    buscfg.quadwp_io_num = -1;
+    buscfg.quadhd_io_num = -1;
+    buscfg.max_transfer_sz = 8192;
+    esp_err_t spi_ret = spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO);
+    if (spi_ret != ESP_OK && spi_ret != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "SPI bus init failed: %s", esp_err_to_name(spi_ret));
+    }
+    vTaskDelay(pdMS_TO_TICKS(10));
 
-    // --- 2. SD card (ВТОРЫМ - использует уже готовую SPI шину) ---
+    // --- 1. SD card ---
     ESP_LOGI(TAG, "Mounting SD card...");
     esp_err_t sd_ret = sd_card_init();
 
@@ -121,11 +131,18 @@ extern "C" void app_main(void)
         ESP_LOGI(TAG, "SD card mounted: %s %uMB", sd_info.type_name, (unsigned int)sd_info.size_mb);
     }
 
-    // --- 3. Config ---
+    // --- 2. Config (читаем с SD до инита E-ink, пока шина свободна) ---
     ESP_LOGI(TAG, "Loading config...");
     config_load(&s_config);
 
-    // Apply display orientation from config
+    vTaskDelay(pdMS_TO_TICKS(50));
+
+    // --- 3. E-ink display (использует уже готовую SPI шину) ---
+    ESP_LOGI(TAG, "Initializing E-ink display...");
+    eink_init();
+    eink_init_partial();
+
+    // Apply display orientation from config (после инита u8g2)
     if (s_config.ui.display.enabled) {
         int rot = (strcmp(s_config.ui.display.orientation, "right") == 0) ? 180 : 0;
         eink_set_rotation(rot);

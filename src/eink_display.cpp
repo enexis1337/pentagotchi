@@ -87,7 +87,7 @@ esp_err_t eink_init(void)
 {
     if (s_display) return ESP_OK;
 
-    // SPI bus config (shared with SD card)
+    // SPI bus already initialized in main() — fallback if called standalone
     spi_bus_config_t buscfg = {};
     buscfg.miso_io_num = PIN_SPI_MISO;
     buscfg.mosi_io_num = PIN_SPI_MOSI;
