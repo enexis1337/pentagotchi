@@ -6,18 +6,14 @@
 # ============================================================
 
 file(GLOB_RECURSE app_sources ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
-list(FILTER app_sources EXCLUDE REGEX "lib_ssd1680_old/")
+list(FILTER app_sources EXCLUDE REGEX "lib_ssd1680(_old)?/")
 
 idf_component_register(
     SRCS ${app_sources} 
-         "lib_ssd1680/lib_ssd1680.cpp"
          "eink_regions.cpp"
     INCLUDE_DIRS
         "."
         "../include"
-        "lib_ssd1680/include"
-        "lib_ssd1680/include/fonts"
-        "lib_ssd1680/include/bitmaps"
     REQUIRES
         nvs_flash
         esp_wifi
@@ -29,4 +25,5 @@ idf_component_register(
         driver
         arduinojson
         u8g2
+        gxepd2
 )
