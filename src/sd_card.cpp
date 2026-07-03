@@ -23,13 +23,18 @@ esp_err_t sd_card_init(void)
     mount_config.max_files = 5;
     mount_config.allocation_unit_size = 16 * 1024;
 
+    // ВАЖНО: SPI шина уже инициализирована E-ink дисплеем!
+    // Драйвер sdspi использует ту же шину SPI2_HOST
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
-    host.slot = SPI2_HOST; // тот же SPI host, что у e-ink — шина общая
+    host.slot = SPI2_HOST;  // та же шина что и E-ink
 
     sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
-    slot_config.gpio_cs = PIN_SD_CS;
+    slot_config.gpio_cs = PIN_SD_CS;  // CS для SD карты (отдельный от E-ink)
     slot_config.host_id = (spi_host_device_t)host.slot;
 
+    // esp_vfs_fat_sdspi_mount попытается инициализировать SPI шину,
+    // но увидит что она уже инициализирована (от E-ink) и просто
+    // добавит SD устройство на существующую шину
     esp_err_t ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config,
                                              &mount_config, &s_card);
 

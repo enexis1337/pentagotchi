@@ -32,3 +32,6 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
 
 # --- C++ exceptions: использует ArduinoJson внутри ---
 CONFIG_COMPILER_CXX_EXCEPTIONS=y
+
+# --- Certificate bundle: отключаем (проблема с генерацией в PlatformIO) ---
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=n

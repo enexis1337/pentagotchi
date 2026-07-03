@@ -41,8 +41,8 @@ static const uint8_t ssd1680_lut_partial[] = {
   0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x1E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
-  0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -184,6 +184,15 @@ static void ssd1680_setup_gate_driver(ssd1680_t *disp)
 static void ssd1680_setup_border(ssd1680_t *disp)
 {
     uint8_t b = 0b00000101;
+    ssd1680_write(disp, SSD1680_BORDER_WAVEFORM_CTRL, &b, sizeof(uint8_t));
+    ssd1680_wait_busy(disp);
+}
+
+// Граница для partial refresh: используем LUT0/переход по LUT, а не VCOM,
+// иначе рамка будет моргать чёрным при каждом частичном обновлении.
+static void ssd1680_setup_border_partial(ssd1680_t *disp)
+{
+    uint8_t b = 0x80;
     ssd1680_write(disp, SSD1680_BORDER_WAVEFORM_CTRL, &b, sizeof(uint8_t));
     ssd1680_wait_busy(disp);
 }
@@ -1089,37 +1098,6 @@ void ssd1680_send_framebuffer(ssd1680_t *disp)
 #endif
 }
 
-// На BW-панели плоскость RAM "RED" (0x26) физически не рисует красный —
-// контроллер использует её как буфер "предыдущего кадра" для вычисления
-// перехода white/black -> white/black в partial refresh. Её нужно держать
-// синхронизированной с фактически показанным изображением, иначе LUT
-// применяет неверные (слишком слабые) переходы — отсюда бледная картинка
-// и серый фон на нетронутых участках.
-static void ssd1680_sync_old_ram(ssd1680_t *disp)
-{
-    switch (disp->orientation)
-    {
-    case SSD1680_90_DEG:
-        ssd1680_set_ram_pos(disp, disp->clmn_cnt - 1, 0);
-        break;
-    case SSD1680_180_DEG:
-        ssd1680_set_ram_pos(disp, disp->clmn_cnt - 1, disp->rows_cnt - 1);
-        break;
-    case SSD1680_270_DEG:
-        ssd1680_set_ram_pos(disp, 0, disp->rows_cnt - 1);
-        break;
-    default: // SSD1680_NORMAL
-        ssd1680_set_ram_pos(disp, 0, 0);
-        break;
-    }
-    ssd1680_write(disp, SSD1680_WRITE_RAM_RED, disp->framebuffer_bw, disp->framebuffer_size);
-    // Здесь НЕ нужен wait_busy: это обычная запись данных в RAM,
-    // а не аппаратная операция (LUT/master activation) — BUSY контроллер
-    // после неё не занимает. Лишний wait_busy тут только добавляет
-    // задержку (или зависание, если BUSY на вашей плате не падает сразу
-    // в LOW после SPI-записи данных).
-}
-
 void ssd1680_partial_init(ssd1680_t *disp)
 {
     // Программный сброс обязателен перед загрузкой своего LUT —
@@ -1130,60 +1108,22 @@ void ssd1680_partial_init(ssd1680_t *disp)
     ssd1680_write(disp, SSD1680_WRITE_LUT, (void *)ssd1680_lut_partial, sizeof(ssd1680_lut_partial));
     ssd1680_wait_busy(disp);
 
-    // Пересобираем data entry mode / RAM-окно / update control 1 / border.
+    // Пересобираем data entry mode / RAM-окно / update control 1,
+    // как при обычной инициализации...
     ssd1680_setup_ram(disp);
 
-    // По умолчанию setup_ram() ставит border=0x05 — "следовать за LUT"
-    // (border waveform привязан к той же группе LUT, что используется
-    // для перезарядки пикселей). После того как мы усилили эту группу
-    // (удлинили импульс ради контраста), граница экрана стала получать
-    // тот же более сильный импульс при каждом partial refresh и уезжает
-    // в серый. Поэтому для partial-режима фиксируем границу на
-    // постоянном уровне VSS (белый), independent от LUT-группы:
-    // D7:D6=01 (Fix Level), D5:D4=00 (VSS).
-    uint8_t border_fix = 0b01000000;
-    ssd1680_write(disp, SSD1680_BORDER_WAVEFORM_CTRL, &border_fix, sizeof(uint8_t));
-    ssd1680_wait_busy(disp);
-
-    // Важно: на этот момент framebuffer_bw должен содержать именно то,
-    // что реально показано на экране (то, что было отправлено последним
-    // full refresh) — эта запись устанавливает корректный базовый
-    // "предыдущий кадр" перед первым partial refresh.
-    ssd1680_sync_old_ram(disp);
+    // ...но border waveform переопределяем на вариант для partial refresh,
+    // иначе setup_ram() выставит "полноэкранный" border 0x05 и рамка
+    // будет мигать чёрным при каждом частичном апдейте.
+    ssd1680_setup_border_partial(disp);
 }
 
 void ssd1680_partial_refresh(ssd1680_t *disp)
 {
-    // На BW-панели (без красного канала) для partial refresh пишем
-    // только чёрно-белую плоскость RAM — как в официальном драйвере
-    // WeAct (epd_displayBW_partial).
-    switch (disp->orientation)
-    {
-    case SSD1680_90_DEG:
-        ssd1680_set_ram_pos(disp, disp->clmn_cnt - 1, 0);
-        break;
-    case SSD1680_180_DEG:
-        ssd1680_set_ram_pos(disp, disp->clmn_cnt - 1, disp->rows_cnt - 1);
-        break;
-    case SSD1680_270_DEG:
-        ssd1680_set_ram_pos(disp, 0, disp->rows_cnt - 1);
-        break;
-    default: // SSD1680_NORMAL
-        ssd1680_set_ram_pos(disp, 0, 0);
-        break;
-    }
-    ssd1680_write(disp, SSD1680_WRITE_RAM_BW, disp->framebuffer_bw, disp->framebuffer_size);
-    ssd1680_wait_busy(disp);
-
-    // Для панелей серии 2.13" (SSD1680, тип EPD213_219 в терминологии
-    // официального драйвера WeAct) правильный код partial-обновления —
-    // 0xCC (WAS_PARTIAL_REFRESH), а не 0xCF (FAST_PARTIAL_REFRESH).
-    ssd1680_refresh(disp, WAS_PARTIAL_REFRESH);
-
-    // Досинхронизируем "предыдущий кадр" тем же изображением — точно как
-    // в официальном драйвере (запись в 0x26 после апдейта), чтобы
-    // следующий partial refresh считал разницу от корректного состояния.
-    ssd1680_sync_old_ram(disp);
+    ssd1680_send_framebuffer(disp);
+    // FAST_PARTIAL_REFRESH (0xCF) использует LUT, загруженный
+    // в ssd1680_partial_init(), а не LUT из OTP, и не мигает экраном.
+    ssd1680_refresh(disp, FAST_PARTIAL_REFRESH);
 }
 
 void ssd1680_set_refresh_window(ssd1680_t *disp, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2)

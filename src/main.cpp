@@ -3,8 +3,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 
 #include "eink_display.h"
+#include "pwn_ui.h"
 #include "config.h"
 #include "sd_card.h"
 #include "wifi_scanner.h"
@@ -19,6 +21,10 @@ static void on_handshake_captured(const uint8_t bssid[6], const char *ssid, cons
 {
     ESP_LOGI(TAG, "Handshake captured! SSID='%s' BSSID=%02X:%02X:%02X:%02X:%02X:%02X -> %s",
              ssid, bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], pcap_path);
+    pwn_ui_on_handshake();
+    char buf[PWN_STR_LEN];
+    snprintf(buf, sizeof(buf), "%d (%d)", 0, 0);
+    pwn_ui_set_shakes(buf);
 }
 
 static void channel_hop_task(void *arg)
@@ -42,8 +48,45 @@ static void channel_hop_task(void *arg)
     int idx = 0;
     while (1) {
         handshake_capture_start(channels[idx]);
+        {
+            char buf[PWN_STR_LEN];
+            snprintf(buf, sizeof(buf), "%02d", (int)channels[idx]);
+            pwn_ui_set_channel(buf);
+        }
+        pwn_ui_commit();
         idx = (idx + 1) % n_channels;
         vTaskDelay(pdMS_TO_TICKS(s_config.pwny.channel_hop_ms));
+    }
+}
+
+static void ghosting_task_fn(void *arg)
+{
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(600000));  // 10 минут
+        ESP_LOGI(TAG, "Anti-ghosting full refresh");
+        pwn_ui_full_commit();
+    }
+}
+
+static void uptime_task_fn(void *arg)
+{
+    char buf[PWN_STR_LEN];
+    char prev[PWN_STR_LEN] = "";
+    
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        uint64_t us = esp_timer_get_time();
+        uint32_t sec = us / 1000000;
+        int h = sec / 3600;
+        int m = (sec % 3600) / 60;
+        int s = sec % 60;
+        snprintf(buf, sizeof(buf), "%02d:%02d:%02d", h, m, s);
+        
+        if (strcmp(buf, prev) != 0) {
+            strcpy(prev, buf);
+            pwn_ui_set_uptime(buf);  // Это отметит REGION_UPTIME как dirty
+            pwn_ui_commit();  // Обновит только dirty регионы
+        }
     }
 }
 
@@ -57,23 +100,20 @@ extern "C" void app_main(void)
         ESP_LOGI(TAG, "Serial debug enabled");
     }
 
-    // --- 1. E-ink display init (ПЕРВЫМ - инициализирует SPI шину) ---
+    // --- 1. E-ink display init (ПЕРВЫМ - инициализирует SPI шину!) ---
     ESP_LOGI(TAG, "Initializing E-ink display...");
-    esp_err_t eink_ret = eink_init();
+    eink_init();
+    eink_init_partial();
+    
+    // Небольшая задержка после E-ink для стабилизации SPI шины
+    vTaskDelay(pdMS_TO_TICKS(200));
 
-    eink_status_t status;
-    memset(&status, 0, sizeof(status));
-    status.display_initialized = (eink_ret == ESP_OK);
-    strncpy(status.device_name, "pentagotchi", sizeof(status.device_name) - 1);
-
-    // --- 2. SD card (ВТОРЫМ - использует уже инициализированную SPI) ---
+    // --- 2. SD card (ВТОРЫМ - использует уже готовую SPI шину) ---
     ESP_LOGI(TAG, "Mounting SD card...");
     esp_err_t sd_ret = sd_card_init();
 
     sd_card_info_t sd_info;
     sd_card_get_info(&sd_info);
-    status.sd_initialized = sd_info.initialized;
-    status.sd_size_mb = sd_info.size_mb;
 
     if (sd_ret != ESP_OK) {
         ESP_LOGE(TAG, "SD card mount failed");
@@ -81,24 +121,20 @@ extern "C" void app_main(void)
         ESP_LOGI(TAG, "SD card mounted: %s %uMB", sd_info.type_name, (unsigned int)sd_info.size_mb);
     }
 
-    // --- 3. Display boot status ---
-    if (status.display_initialized) {
-        eink_show_boot_status(&status);
-        ESP_LOGI(TAG, "Boot status displayed on e-ink");
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(2000));
-
-    // --- 4. Config / whitelist ---
+    // --- 3. Config ---
     ESP_LOGI(TAG, "Loading config...");
     config_load(&s_config);
 
     // Apply display orientation from config
-    if (status.display_initialized && s_config.ui.display.enabled) {
+    if (s_config.ui.display.enabled) {
         int rot = (strcmp(s_config.ui.display.orientation, "right") == 0) ? 180 : 0;
         eink_set_rotation(rot);
-        eink_show_boot_status(&status);
     }
+
+    // --- 4. Init pwnagotchi-style UI with config values ---
+    pwn_ui_init();
+    pwn_ui_set_name(s_config.main.name);
+    pwn_ui_set_mode(s_config.ai.enabled ? "  AI" : "AUTO");
 
     ESP_LOGI(TAG, "Device name: '%s' | lang: %s | AI: %s | web UI: %s | display: %s",
              s_config.main.name, s_config.main.lang,
@@ -116,6 +152,11 @@ extern "C" void app_main(void)
 
     ap_info_t aps[SCANNER_MAX_APS];
     int found = wifi_scanner_scan(aps, SCANNER_MAX_APS);
+    {
+        char buf[PWN_STR_LEN];
+        snprintf(buf, sizeof(buf), "%d", found);
+        pwn_ui_set_aps(buf);
+    }
     ESP_LOGI(TAG, "Found %d access point(s):", found);
     for (int i = 0; i < found; i++) {
         bool wl = config_is_ssid_whitelisted(&s_config, aps[i].ssid) ||
@@ -132,7 +173,16 @@ extern "C" void app_main(void)
     handshake_capture_init(&s_config);
     handshake_capture_set_callback(on_handshake_captured);
 
-    // --- 8. Channel-hopping ---
+    // --- 8. Show UI (first frame) ---
+    pwn_ui_on_normal();
+
+    // --- 9. Anti-ghosting refresh (every 60s) ---
+    xTaskCreate(ghosting_task_fn, "ghosting", 2048, NULL, 2, NULL);
+
+    // --- 10. Uptime counter (memory only, no display refresh) ---
+    xTaskCreate(uptime_task_fn, "uptime", 2048, NULL, 3, NULL);
+
+    // --- 11. Channel-hopping ---
     xTaskCreate(channel_hop_task, "channel_hop", 4096, NULL, 5, NULL);
 
     ESP_LOGI(TAG, "=== pwny-s3 running ===");

@@ -6,9 +6,12 @@
 # ============================================================
 
 file(GLOB_RECURSE app_sources ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+list(FILTER app_sources EXCLUDE REGEX "lib_ssd1680_old/")
 
 idf_component_register(
-    SRCS ${app_sources} "lib_ssd1680/lib_ssd1680.cpp"
+    SRCS ${app_sources} 
+         "lib_ssd1680/lib_ssd1680.cpp"
+         "eink_regions.cpp"
     INCLUDE_DIRS
         "."
         "../include"
