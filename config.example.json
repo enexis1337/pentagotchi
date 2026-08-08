@@ -1,0 +1,41 @@
+// main - настройки имени, языка, белого списка сетей что не атакуются, и плагинов(они будуи в будущем)
+{
+  "main": {
+    "name": "pentagotchi",
+    "lang": "en",
+    "whitelist": [
+    ],
+    "plugins": {
+      "grid": { "enabled": false },
+      "gps": { "enabled": false }
+    }
+  },
+// настройки пользовательского интерфейса. rotation - поворот дисплея, type - тип дисплея, color - цвет текста, web - веб интерфейс
+  "ui": {
+    "display": {
+      "enabled": true,
+      "rotation": "right",
+      "type": "weact_bw",
+      "color": "white"
+    },
+    "web": {
+      "enabled": false,
+      "address": "192.168.4.1",
+      "username": "admin",
+      "password": "pentagotchi",
+    }
+  },
+// настройки AI. enabled - включить или выключить AI, laziness - лень AI, epochs_per_episode - количество эпох за эпизод, min_rssi - минимальный RSSI для захвата хэндшейка
+// ии пока не добавлен в прошивку но планируетя в будущем
+  "ai": {
+    "enabled": false,
+    "laziness": 0.5,
+    "epochs_per_episode": 1,
+    "min_rssi": -75
+  },
+// настройки движка который ловит хэндшейки
+  "pwny": {
+    "saveDirectory": "/sdcard/handshakes",
+    "deauth_enabled": true,
+  }
+}

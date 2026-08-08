@@ -5,14 +5,14 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "driver/gpio.h"
-#include "u8g2.h"
+#include <U8g2lib.h>
 #include "eink_display.h"
 #include "pins.h"
 
 #include <Arduino.h>
 #include <SPI.h>
 #include "driver/spi_master.h"
-#include "GxEPD2_213_GDEY0213B74.h"
+#include <gdey/GxEPD2_213_GDEY0213B74.h>
 
 static const char *TAG = "eink";
 
@@ -87,32 +87,24 @@ esp_err_t eink_init(void)
 {
     if (s_display) return ESP_OK;
 
-    // SPI bus already initialized in main() — fallback if called standalone
-    spi_bus_config_t buscfg = {};
-    buscfg.miso_io_num = PIN_SPI_MISO;
-    buscfg.mosi_io_num = PIN_SPI_MOSI;
-    buscfg.sclk_io_num = PIN_SPI_SCK;
-    buscfg.quadwp_io_num = -1;
-    buscfg.quadhd_io_num = -1;
-    buscfg.max_transfer_sz = 8192;
-
-    esp_err_t ret = spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO);
-    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
-        ESP_LOGE(TAG, "SPI bus init failed: %s", esp_err_to_name(ret));
-        return ESP_FAIL;
-    }
-
-    // Create Arduino SPIClass on the same host (reuses existing bus)
-    s_spi = new SPIClass(SPI2_HOST);
-    s_spi->begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, -1);
+    Serial.printf("[eink] init: SPI bus MOSI=%d SCK=%d (arduino HSPI slot, SPI3 hw)\n",
+                  PIN_EINK_MOSI, PIN_EINK_SCK);
+    // E-ink on its own SPI (HSPI slot 1 -> SPI3 hardware)
+    s_spi = new SPIClass(HSPI);
+    s_spi->begin(PIN_EINK_SCK, -1, PIN_EINK_MOSI, -1);
+    Serial.printf("[eink] init: SPIClass ready\n");
 
     // Create GxEPD2 display instance
     s_display = new GxEPD2_213_GDEY0213B74(
-        PIN_EINK_CS, PIN_EINK_DC, PIN_EINK_RST, PIN_EINK_BUSY
+        PIN_EINK_CS, PIN_EINK_DC, PIN_EINK_RES, PIN_EINK_BUSY
     );
 
     s_display->selectSPI(*s_spi, SPISettings(4000000, MSBFIRST, SPI_MODE0));
+    Serial.printf("[eink] init: calling GxEPD2 init (CS=%d DC=%d RES=%d BUSY=%d)\n",
+                  PIN_EINK_CS, PIN_EINK_DC, PIN_EINK_RES, PIN_EINK_BUSY);
+
     s_display->init(0); // serial_diag_bitrate = 0 (disabled)
+    Serial.printf("[eink] init: GxEPD2 init ok\n");
 
     // Init u8g2 for text rendering
     u8g2_init_draw();
@@ -121,78 +113,37 @@ esp_err_t eink_init(void)
     return ESP_OK;
 }
 
-esp_err_t eink_clear(void)
-{
-    if (!s_display) return ESP_ERR_INVALID_STATE;
-    memset(g_u8g2_buf, 0xFF, U8G2_BUF_SIZE);
-    return ESP_OK;
-}
-
-esp_err_t eink_print_text(const char *text, uint16_t x, uint16_t y)
-{
-    if (!s_display) return ESP_ERR_INVALID_STATE;
-    if (!text) return ESP_ERR_INVALID_ARG;
-
-    u8g2_SetFont(&g_u8g2, u8g2_font_7x13_tf);
-    u8g2_SetFontPosTop(&g_u8g2);
-    u8g2_DrawStr(&g_u8g2, x, y, text);
-
-    return ESP_OK;
-}
-
-esp_err_t eink_show_boot_status(const eink_status_t *status)
-{
-    if (!s_display) return ESP_ERR_INVALID_STATE;
-    if (!status) return ESP_ERR_INVALID_ARG;
-
-    eink_clear();
-
-    eink_print_text("PENTAGOTCHI BOOT", 10, 10);
-    char buf[64];
-    snprintf(buf, sizeof(buf), "NAME: %s", status->device_name);
-    eink_print_text(buf, 10, 25);
-    eink_print_text(status->display_initialized ? "DISPLAY: OK" : "DISPLAY: FAIL", 10, 40);
-
-    if (status->sd_initialized) {
-        snprintf(buf, sizeof(buf), "SD: %luMB", (unsigned long)status->sd_size_mb);
-        eink_print_text(buf, 10, 55);
-    } else {
-        eink_print_text("SD: NOT FOUND", 10, 55);
-    }
-
-    eink_print_text("INITIALIZING...", 10, 70);
-
-    return eink_refresh();
-}
-
-esp_err_t eink_init_partial(void)
-{
-    if (!s_display) return ESP_ERR_INVALID_STATE;
-    ESP_LOGD(TAG, "Partial mode: handled by GxEPD2 natively");
-    return ESP_OK;
-}
-
 esp_err_t eink_refresh(void)
 {
-    if (!s_display) return ESP_ERR_INVALID_STATE;
-
-    int64_t now = esp_timer_get_time();
-    if (now - s_last_refresh_us < 500000) {
-        return ESP_OK;
+    if (!s_display) {
+        Serial.printf("[eink] refresh skipped (s_display==null)\n");
+        return ESP_ERR_INVALID_STATE;
     }
 
+    int64_t now = esp_timer_get_time();
+    int64_t wait_us = 300000 - (now - s_last_refresh_us);
+    if (s_last_refresh_us != 0 && wait_us > 0) {
+        vTaskDelay(pdMS_TO_TICKS((wait_us + 999) / 1000));
+    }
+
+    // Partial (differential) update. Note: needs U8G2_16BIT so the u8g2
+    // buffer covers the full 250px width, otherwise the right edge never
+    // reaches the panel.
     u8g2_to_gxepd2();
     s_display->writeImage(s_gx_buf, 0, 0, 122, 250);
-    s_display->refresh(true); // partial update
+    s_display->refresh(true); // partial update (no flicker)
 
-    s_last_refresh_us = now;
+    s_last_refresh_us = esp_timer_get_time();
     ESP_LOGD(TAG, "Display partial refresh (GxEPD2)");
     return ESP_OK;
 }
 
 esp_err_t eink_full_refresh(void)
 {
-    if (!s_display) return ESP_ERR_INVALID_STATE;
+    if (!s_display) {
+        Serial.printf("[eink] full refresh skipped (s_display==null)\n");
+        return ESP_ERR_INVALID_STATE;
+    }
 
     u8g2_to_gxepd2();
     s_display->writeImageForFullRefresh(s_gx_buf, 0, 0, 122, 250);
@@ -247,4 +198,29 @@ bool eink_should_do_full_refresh(void) {
 void eink_mark_full_refresh_done(void) {
     s_last_full_refresh_us = esp_timer_get_time();
     ESP_LOGD(TAG, "Full refresh timestamp updated");
+}
+
+// ========== C++ wrapper class implementation ==========
+
+EInkDisplay::EInkDisplay() : m_sd_spi(nullptr) {
+}
+
+EInkDisplay::~EInkDisplay() {
+    if (m_sd_spi) {
+        m_sd_spi->end();
+        delete m_sd_spi;
+        m_sd_spi = nullptr;
+    }
+    eink_deinit();
+}
+
+SPIClass *EInkDisplay::spi() {
+    if (!m_sd_spi) {
+        // SD on its own SPI (FSPI slot 0 -> SPI2 hardware), pins 11/13/12/5
+        m_sd_spi = new SPIClass(FSPI);
+        m_sd_spi->begin(PIN_SD_SCK, PIN_SD_MISO, PIN_SD_MOSI, -1);
+        Serial.printf("[eink] SD SPI ready (FSPI slot, SPI2 hw): MOSI=%d MISO=%d SCK=%d\n",
+                      PIN_SD_MOSI, PIN_SD_MISO, PIN_SD_SCK);
+    }
+    return m_sd_spi;
 }

@@ -23,7 +23,7 @@ static const region_rect_t s_regions[REGION_MAX] = {
     
     // REGION_UPTIME - "UP XX:XX:XX"
     {PWN_X_UPTIME, PWN_Y_UPTIME, 100, 15},
-    
+
     // REGION_NAME - "pentagotchi>"
     {PWN_X_NAME, PWN_Y_NAME, 150, 15},
     

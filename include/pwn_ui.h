@@ -21,11 +21,12 @@ extern "C" {
 #define PWN_Y_FACE       40
 #define PWN_X_NAME       5
 #define PWN_Y_NAME       20
+#define PWN_NAME_PROMPT  ">"
 #define PWN_X_CH         0
 #define PWN_Y_CH         0
 #define PWN_X_APS        32
 #define PWN_Y_APS        0
-#define PWN_X_UPTIME     185
+#define PWN_X_UPTIME     169
 #define PWN_Y_UPTIME     0
 #define PWN_X_STATUS     110
 #define PWN_Y_STATUS     20
@@ -46,7 +47,7 @@ extern "C" {
 #define PWN_FACE_LOOK_L       "(O_O )"
 #define PWN_FACE_LOOK_R_HAPPY "( ^_^)"
 #define PWN_FACE_LOOK_L_HAPPY "(^_^ )"
-#define PWN_FACE_SLEEP        "(-_-) z"
+#define PWN_FACE_SLEEP        "(-_-)"
 #define PWN_FACE_SLEEP2       "(= =)"
 #define PWN_FACE_AWAKE        "(^_^)"
 #define PWN_FACE_BORED        "(-_-)"
@@ -92,14 +93,12 @@ void pwn_ui_set_shakes(const char *val);
 void pwn_ui_set_mode(const char *val);
 void pwn_ui_set_friend(const char *face, const char *name);
 
-void pwn_ui_update(void);
 void pwn_ui_commit(void);
 void pwn_ui_full_commit(void);
 void pwn_ui_force_update(void);
 
 // Event helpers — set face+status and update
 void pwn_ui_on_handshake(void);
-void pwn_ui_on_assoc(const char *ap);
 void pwn_ui_on_deauth(const char *sta);
 void pwn_ui_on_normal(void);
 void pwn_ui_on_bored(void);
@@ -107,7 +106,6 @@ void pwn_ui_on_sad(void);
 void pwn_ui_on_lonely(void);
 void pwn_ui_on_excited(void);
 void pwn_ui_on_motivated(void);
-void pwn_ui_on_shutdown(void);
 void pwn_ui_on_starting(void);
 
 #ifdef __cplusplus
