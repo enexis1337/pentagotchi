@@ -11,9 +11,14 @@
 #include <esp_wifi_types.h>
 #include <freertos/FreeRTOS.h>
 
-class PwnagotchiApp;
+// Global serial-output gate. When false, all Serial output is suppressed.
+extern bool gSerialEnabled;
+#define SERIAL_PRINTF(...)  do { if (gSerialEnabled) Serial.printf(__VA_ARGS__); } while (0)
+#define SERIAL_PRINTLN(...) do { if (gSerialEnabled) Serial.println(__VA_ARGS__); } while (0)
 
-namespace pwnagotchi::detail {
+class PentagotchiApp;
+
+namespace pentagotchi::detail {
 
 struct BeaconEntry {
     uint8_t mac[6]{};
@@ -79,10 +84,11 @@ constexpr wifi_promiscuous_filter_t kPromiscuousFilter = {
 };
 
 extern portMUX_TYPE gRadioMux;
-extern PwnagotchiApp *gInstance;
-constexpr const char *kLogTag = "pwnagotchi";
+extern PentagotchiApp *gInstance;
+constexpr const char *kLogTag = "pentagotchi";
 
 extern std::set<BeaconEntry> gRegisteredBeacons;
+extern std::set<uint64_t> gHandshakeBssids;
 extern std::vector<PwngridPeer> gPeers;
 extern uint8_t gTotalFriends;
 extern String gLastFriendName;
@@ -114,4 +120,4 @@ inline uint8_t readWifiChannel() {
 
 extern "C" esp_err_t esp_wifi_80211_tx(wifi_interface_t ifx, const void *buffer, int len, bool en_sys_seq);
 
-} // namespace pwnagotchi::detail
+} // namespace pentagotchi::detail

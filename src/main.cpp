@@ -1,17 +1,18 @@
 #include <Arduino.h>
 
 #include "eink_display.h"
-#include "pwnagotchi_app.h"
+#include "pentagotchi_app.h"
+#include "pentagotchi_internal.h"
 
 EInkDisplay display;
-PwnagotchiApp app(display);
+PentagotchiApp app(display);
 
 void setup() {
     Serial.begin(115200);
     delay(200);
-    Serial.println("[main] boot begin");
+    SERIAL_PRINTLN("[main] boot begin");
     app.begin();
-    Serial.println("[main] app.begin done");
+    SERIAL_PRINTLN("[main] app.begin done");
 }
 
 void loop() {

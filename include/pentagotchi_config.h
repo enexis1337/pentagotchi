@@ -46,11 +46,12 @@ typedef struct {
     // --- pwny ---
     char saveDirectory[64];
     bool deauth_enabled;
-} pwnagotchi_config_t;
+    bool serial; // 0 = serial silent, 1 = serial output enabled
+} pentagotchi_config_t;
 
-void pwnagotchi_config_set_defaults(pwnagotchi_config_t *cfg);
-bool pwnagotchi_config_load(pwnagotchi_config_t *cfg, bool sd_ready);
-bool pwnagotchi_config_save(const pwnagotchi_config_t *cfg, bool sd_ready);
+void pentagotchi_config_set_defaults(pentagotchi_config_t *cfg);
+bool pentagotchi_config_load(pentagotchi_config_t *cfg, bool sd_ready);
+bool pentagotchi_config_save(const pentagotchi_config_t *cfg, bool sd_ready);
 
 #ifdef __cplusplus
 }

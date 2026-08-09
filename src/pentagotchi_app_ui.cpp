@@ -1,11 +1,11 @@
-#include "pwnagotchi_app.h"
+#include "pentagotchi_app.h"
 
 #include "eink_display.h"
-#include "pwnagotchi_internal.h"
+#include "pentagotchi_internal.h"
 
-using namespace pwnagotchi::detail;
+using namespace pentagotchi::detail;
 
-void PwnagotchiApp::updateUi(bool fullRefresh) {
+void PentagotchiApp::updateUi(bool fullRefresh) {
     if (fullRefresh || eink_should_do_full_refresh()) {
         pwn_ui_full_commit();
         eink_mark_full_refresh_done();

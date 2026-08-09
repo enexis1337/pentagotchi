@@ -8,6 +8,7 @@
 #include <U8g2lib.h>
 #include "eink_display.h"
 #include "pins.h"
+#include "pentagotchi_internal.h"
 
 #include <Arduino.h>
 #include <SPI.h>
@@ -87,12 +88,12 @@ esp_err_t eink_init(void)
 {
     if (s_display) return ESP_OK;
 
-    Serial.printf("[eink] init: SPI bus MOSI=%d SCK=%d (arduino HSPI slot, SPI3 hw)\n",
+    SERIAL_PRINTF("[eink] init: SPI bus MOSI=%d SCK=%d (arduino HSPI slot, SPI3 hw)\n",
                   PIN_EINK_MOSI, PIN_EINK_SCK);
     // E-ink on its own SPI (HSPI slot 1 -> SPI3 hardware)
     s_spi = new SPIClass(HSPI);
     s_spi->begin(PIN_EINK_SCK, -1, PIN_EINK_MOSI, -1);
-    Serial.printf("[eink] init: SPIClass ready\n");
+    SERIAL_PRINTF("[eink] init: SPIClass ready\n");
 
     // Create GxEPD2 display instance
     s_display = new GxEPD2_213_GDEY0213B74(
@@ -100,11 +101,11 @@ esp_err_t eink_init(void)
     );
 
     s_display->selectSPI(*s_spi, SPISettings(4000000, MSBFIRST, SPI_MODE0));
-    Serial.printf("[eink] init: calling GxEPD2 init (CS=%d DC=%d RES=%d BUSY=%d)\n",
+    SERIAL_PRINTF("[eink] init: calling GxEPD2 init (CS=%d DC=%d RES=%d BUSY=%d)\n",
                   PIN_EINK_CS, PIN_EINK_DC, PIN_EINK_RES, PIN_EINK_BUSY);
 
     s_display->init(0); // serial_diag_bitrate = 0 (disabled)
-    Serial.printf("[eink] init: GxEPD2 init ok\n");
+    SERIAL_PRINTF("[eink] init: GxEPD2 init ok\n");
 
     // Init u8g2 for text rendering
     u8g2_init_draw();
@@ -116,7 +117,7 @@ esp_err_t eink_init(void)
 esp_err_t eink_refresh(void)
 {
     if (!s_display) {
-        Serial.printf("[eink] refresh skipped (s_display==null)\n");
+        SERIAL_PRINTF("[eink] refresh skipped (s_display==null)\n");
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -141,7 +142,7 @@ esp_err_t eink_refresh(void)
 esp_err_t eink_full_refresh(void)
 {
     if (!s_display) {
-        Serial.printf("[eink] full refresh skipped (s_display==null)\n");
+        SERIAL_PRINTF("[eink] full refresh skipped (s_display==null)\n");
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -219,7 +220,7 @@ SPIClass *EInkDisplay::spi() {
         // SD on its own SPI (FSPI slot 0 -> SPI2 hardware), pins 11/13/12/5
         m_sd_spi = new SPIClass(FSPI);
         m_sd_spi->begin(PIN_SD_SCK, PIN_SD_MISO, PIN_SD_MOSI, -1);
-        Serial.printf("[eink] SD SPI ready (FSPI slot, SPI2 hw): MOSI=%d MISO=%d SCK=%d\n",
+        SERIAL_PRINTF("[eink] SD SPI ready (FSPI slot, SPI2 hw): MOSI=%d MISO=%d SCK=%d\n",
                       PIN_SD_MOSI, PIN_SD_MISO, PIN_SD_SCK);
     }
     return m_sd_spi;

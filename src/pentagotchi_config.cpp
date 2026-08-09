@@ -1,6 +1,6 @@
-#include "pwnagotchi_config.h"
+#include "pentagotchi_config.h"
 
-#include "pwnagotchi_internal.h"
+#include "pentagotchi_internal.h"
 
 #include <ArduinoJson.h>
 #include <FS.h>
@@ -8,7 +8,7 @@
 #include <cstring>
 #include <esp_log.h>
 
-using namespace pwnagotchi::detail;
+using namespace pentagotchi::detail;
 
 static const char *kConfigPath = "/config.json";
 
@@ -39,7 +39,7 @@ static bool parse_mac(const char *s, uint8_t out[6]) {
     return true;
 }
 
-void pwnagotchi_config_set_defaults(pwnagotchi_config_t *cfg) {
+void pentagotchi_config_set_defaults(pentagotchi_config_t *cfg) {
     if (!cfg) { return; }
     memset(cfg, 0, sizeof(*cfg));
 
@@ -75,9 +75,10 @@ void pwnagotchi_config_set_defaults(pwnagotchi_config_t *cfg) {
     strncpy(cfg->saveDirectory, "/sdcard/handshakes", sizeof(cfg->saveDirectory) - 1);
     cfg->saveDirectory[sizeof(cfg->saveDirectory) - 1] = '\0';
     cfg->deauth_enabled = true;
+    cfg->serial = false;
 }
 
-static void parse_whitelist(pwnagotchi_config_t *cfg, const JsonObject &main) {
+static void parse_whitelist(pentagotchi_config_t *cfg, const JsonObject &main) {
     cfg->whitelist_count = 0;
     if (!main["whitelist"].is<JsonArray>()) { return; }
     for (JsonVariant v : main["whitelist"].as<JsonArray>()) {
@@ -89,7 +90,7 @@ static void parse_whitelist(pwnagotchi_config_t *cfg, const JsonObject &main) {
     }
 }
 
-bool pwnagotchi_config_load(pwnagotchi_config_t *cfg, bool sd_ready) {
+bool pentagotchi_config_load(pentagotchi_config_t *cfg, bool sd_ready) {
     if (!cfg) { return false; }
 
     if (!sd_ready) {
@@ -159,6 +160,7 @@ bool pwnagotchi_config_load(pwnagotchi_config_t *cfg, bool sd_ready) {
         JsonObject pwny = doc["pwny"];
         copy_string(pwny["saveDirectory"] | cfg->saveDirectory, cfg->saveDirectory, sizeof(cfg->saveDirectory));
         cfg->deauth_enabled = pwny["deauth_enabled"] | cfg->deauth_enabled;
+        cfg->serial = pwny["serial"] | cfg->serial;
     }
 
     ESP_LOGI(kLogTag, "Loaded config from %s (name=%s lang=%s deauth=%d whitelist=%u)",
@@ -166,7 +168,7 @@ bool pwnagotchi_config_load(pwnagotchi_config_t *cfg, bool sd_ready) {
     return true;
 }
 
-bool pwnagotchi_config_save(const pwnagotchi_config_t *cfg, bool sd_ready) {
+bool pentagotchi_config_save(const pentagotchi_config_t *cfg, bool sd_ready) {
     if (!cfg) { return false; }
     if (!sd_ready) {
         ESP_LOGW(kLogTag, "SD not ready, config not saved");
@@ -217,6 +219,7 @@ bool pwnagotchi_config_save(const pwnagotchi_config_t *cfg, bool sd_ready) {
     JsonObject pwny = doc["pwny"].to<JsonObject>();
     pwny["saveDirectory"] = cfg->saveDirectory;
     pwny["deauth_enabled"] = cfg->deauth_enabled;
+    pwny["serial"] = cfg->serial;
 
     bool ok = serializeJsonPretty(doc, file) > 0;
     file.close();

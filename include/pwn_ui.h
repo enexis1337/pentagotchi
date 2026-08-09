@@ -16,7 +16,7 @@ extern "C" {
 #define PWN_STR_LEN        24
 #define PWN_FRIEND_NAME_LEN 64
 
-// Layout positions (matching original pwnagotchi Waveshare V2/V3 black, 250x122)
+// Layout positions (matching original pentagotchi Waveshare V2/V3 black, 250x122)
 #define PWN_X_FACE       0
 #define PWN_Y_FACE       40
 #define PWN_X_NAME       5
@@ -42,7 +42,7 @@ extern "C" {
 #define PWN_LINE1_Y      14
 #define PWN_LINE2_Y      108
 
-// Pwnagotchi-style ASCII faces (all plain ASCII, renderable by ANY u8g2 font)
+// Pentagotchi-style ASCII faces (all plain ASCII, renderable by ANY u8g2 font)
 #define PWN_FACE_LOOK_R       "( o_o)"
 #define PWN_FACE_LOOK_L       "(O_O )"
 #define PWN_FACE_LOOK_R_HAPPY "( ^_^)"

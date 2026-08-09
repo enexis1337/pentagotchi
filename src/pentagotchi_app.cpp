@@ -1,16 +1,16 @@
-#include "pwnagotchi_app.h"
+#include "pentagotchi_app.h"
 
 #include "eink_display.h"
-#include "pwnagotchi_internal.h"
+#include "pentagotchi_internal.h"
 
 #include <esp_log.h>
 #include <esp_random.h>
 
-using namespace pwnagotchi::detail;
+using namespace pentagotchi::detail;
 
-PwnagotchiApp::PwnagotchiApp(EInkDisplay &d) : display(d) {}
+PentagotchiApp::PentagotchiApp(EInkDisplay &d) : display(d) {}
 
-void PwnagotchiApp::begin() {
+void PentagotchiApp::begin() {
     gInstance = this;
 
     display.begin();
@@ -18,12 +18,15 @@ void PwnagotchiApp::begin() {
     ensureStorageReady();
 
     // Config: defaults from code, optional override from /config.json on SD
-    pwnagotchi_config_set_defaults(&config);
-    if (storageReady && !pwnagotchi_config_load(&config, true)) {
-        pwnagotchi_config_save(&config, true); // create a default config file
+    pentagotchi_config_set_defaults(&config);
+    if (storageReady && !pentagotchi_config_load(&config, true)) {
+        pentagotchi_config_save(&config, true); // create a default config file
     }
-    Serial.printf("[pwnagotchi] config: name=\"%s\" lang=%s deauth=%d rotation=%s\n",
-                  config.name, config.lang, config.deauth_enabled, config.display.rotation);
+    gSerialEnabled = config.serial;
+    esp_log_level_set("*", config.serial ? ESP_LOG_INFO : ESP_LOG_NONE);
+    SERIAL_PRINTF("[pentagotchi] config: name=\"%s\" lang=%s deauth=%d rotation=%s serial=%d\n",
+                  config.name, config.lang, config.deauth_enabled, config.display.rotation,
+                  config.serial);
 
     // Display rotation from config (new")/inverted -> 180)
     if (strncmp(config.display.rotation, "inverted", 8) == 0 ||
@@ -51,11 +54,14 @@ void PwnagotchiApp::begin() {
     startTime = millis();
 }
 
-void PwnagotchiApp::loop() {
+void PentagotchiApp::loop() {
     const uint32_t now = millis();
 
     if (handshakePending) {
         handshakePending = false;
+        char shakes[16];
+        snprintf(shakes, sizeof(shakes), "%d (%d)", gHandshakeCount, gHandshakeCount);
+        pwn_ui_set_shakes(shakes);
         pwn_ui_on_handshake();
     }
 
@@ -85,7 +91,7 @@ void PwnagotchiApp::loop() {
     }
 }
 
-void PwnagotchiApp::updateUptime() {
+void PentagotchiApp::updateUptime() {
     uint32_t elapsed = (millis() - startTime) / 1000;
     uint32_t hh = elapsed / 3600;
     uint32_t mm = (elapsed % 3600) / 60;
@@ -95,7 +101,7 @@ void PwnagotchiApp::updateUptime() {
     pwn_ui_set_uptime(uptime);
 }
 
-void PwnagotchiApp::updatePwnUiData() {
+void PentagotchiApp::updatePwnUiData() {
     uint8_t ch = readWifiChannel();
     char buf[8];
     snprintf(buf, sizeof(buf), "%u", ch);
@@ -124,7 +130,7 @@ void PwnagotchiApp::updatePwnUiData() {
     }
 }
 
-void PwnagotchiApp::triggerRandomMood() {
+void PentagotchiApp::triggerRandomMood() {
     const int r = esp_random() % 6;
     switch (r) {
         case 0: pwn_ui_on_normal(); break;
@@ -136,7 +142,7 @@ void PwnagotchiApp::triggerRandomMood() {
     }
 }
 
-void PwnagotchiApp::wakeAnimation() {
+void PentagotchiApp::wakeAnimation() {
     pwn_ui_set_face(PWN_FACE_SLEEP);
     pwn_ui_set_status("Waking up...");
     pwn_ui_full_commit();

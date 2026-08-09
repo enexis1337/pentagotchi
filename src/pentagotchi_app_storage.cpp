@@ -1,6 +1,6 @@
-#include "pwnagotchi_app.h"
+#include "pentagotchi_app.h"
 #include "eink_display.h"
-#include "pwnagotchi_internal.h"
+#include "pentagotchi_internal.h"
 
 #include <FS.h>
 #include <SD.h>
@@ -8,7 +8,7 @@
 #include <cstring>
 #include <esp_log.h>
 
-using namespace pwnagotchi::detail;
+using namespace pentagotchi::detail;
 
 static void ensure_dir_recursive(const String &path) {
     String cur;
@@ -28,41 +28,41 @@ while (start <= path.length()) {
     }
 }
 
-void PwnagotchiApp::ensureStorageReady() {
+void PentagotchiApp::ensureStorageReady() {
     if (storageReady) { return; }
 
     SPIClass *spi = display.spi();
     if (!spi) {
         ESP_LOGW(kLogTag, "SPI not initialized, cannot init SD");
-        Serial.println("[pwnagotchi] SPI not initialized");
+        SERIAL_PRINTLN("[pentagotchi] SPI not initialized");
         return;
     }
 
-    Serial.printf("[pwnagotchi] SD init: CS=GPIO%d, MOSI=GPIO%d, MISO=GPIO%d, SCK=GPIO%d\n",
+    SERIAL_PRINTF("[pentagotchi] SD init: CS=GPIO%d, MOSI=GPIO%d, MISO=GPIO%d, SCK=GPIO%d\n",
                   PIN_SD_CS, PIN_SD_MOSI, PIN_SD_MISO, PIN_SD_SCK);
 
     if (!SD.begin(PIN_SD_CS, *spi)) {
         ESP_LOGW(kLogTag, "Failed to initialize SD card");
-        Serial.println("[pwnagotchi] SD card initialization FAILED");
-        Serial.println("[pwnagotchi] Check wiring: CS->GPIO5, MOSI->GPIO11, MISO->GPIO13, SCK->GPIO12");
-        Serial.println("[pwnagotchi] Verify SD card is inserted and powered (3.3V)");
+        SERIAL_PRINTLN("[pentagotchi] SD card initialization FAILED");
+        SERIAL_PRINTLN("[pentagotchi] Check wiring: CS->GPIO5, MOSI->GPIO11, MISO->GPIO13, SCK->GPIO12");
+        SERIAL_PRINTLN("[pentagotchi] Verify SD card is inserted and powered (3.3V)");
         return;
     }
     ESP_LOGI(kLogTag, "SD card initialized successfully");
-    Serial.println("[pwnagotchi] SD card initialized successfully");
+    SERIAL_PRINTLN("[pentagotchi] SD card initialized successfully");
 
     storageReady = true;
     ESP_LOGI(kLogTag, "Handshake storage ready");
-    Serial.println("[pwnagotchi] Handshake storage ready");
+    SERIAL_PRINTLN("[pentagotchi] Handshake storage ready");
 }
 
-void PwnagotchiApp::saveHandshake(const wifi_promiscuous_pkt_t *packet) {
+void PentagotchiApp::saveHandshake(const wifi_promiscuous_pkt_t *packet) {
     static uint32_t lastWarn = 0;
     if (!storageReady) {
         uint32_t now = millis();
         if (now - lastWarn > 5000) {
             ESP_LOGW(kLogTag, "Storage not ready; skipping handshake capture");
-            Serial.println("[pwnagotchi] Storage not ready; skipping handshake capture");
+            SERIAL_PRINTLN("[pentagotchi] Storage not ready; skipping handshake capture");
             lastWarn = now;
         }
         return;
@@ -86,7 +86,7 @@ void PwnagotchiApp::saveHandshake(const wifi_promiscuous_pkt_t *packet) {
     fs::File file = SD.open(path, SD.exists(path) ? FILE_APPEND : FILE_WRITE);
     if (!file) {
         ESP_LOGW(kLogTag, "Failed to open %s", path.c_str());
-        Serial.printf("[pwnagotchi] Failed to open %s\n", path.c_str());
+        SERIAL_PRINTF("[pentagotchi] Failed to open %s\n", path.c_str());
         return;
     }
 
@@ -105,5 +105,5 @@ void PwnagotchiApp::saveHandshake(const wifi_promiscuous_pkt_t *packet) {
     file.write(packet->payload, packet->rx_ctrl.sig_len);
     file.close();
     ESP_LOGI(kLogTag, "Handshake saved to %s (%u bytes)", path.c_str(), packet->rx_ctrl.sig_len);
-    Serial.printf("[pwnagotchi] Handshake saved to %s (%u bytes)\n", path.c_str(), packet->rx_ctrl.sig_len);
+    SERIAL_PRINTF("[pentagotchi] Handshake saved to %s (%u bytes)\n", path.c_str(), packet->rx_ctrl.sig_len);
 }

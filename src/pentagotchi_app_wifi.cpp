@@ -1,6 +1,6 @@
-#include "pwnagotchi_app.h"
+#include "pentagotchi_app.h"
 
-#include "pwnagotchi_internal.h"
+#include "pentagotchi_internal.h"
 
 #include <ArduinoJson.h>
 #include <esp_err.h>
@@ -19,7 +19,7 @@
 #include <iterator>
 #include <vector>
 
-using namespace pwnagotchi::detail;
+using namespace pentagotchi::detail;
 
 extern "C" esp_err_t esp_wifi_internal_tx(wifi_interface_t ifx, const void *buffer, int len);
 
@@ -37,7 +37,7 @@ esp_err_t sendRawFrame(wifi_interface_t ifx, const void *frame, int len, const c
 
 } // namespace
 
-void PwnagotchiApp::initWifi() {
+void PentagotchiApp::initWifi() {
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -57,12 +57,12 @@ void PwnagotchiApp::initWifi() {
     ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(kTxPowerDefault));
 
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_filter(&kPromiscuousFilter));
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(&PwnagotchiApp::wifiPromiscuousCallback));
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(&PentagotchiApp::wifiPromiscuousCallback));
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
     ESP_ERROR_CHECK(esp_wifi_set_channel(static_cast<uint8_t>(1 + random(0, 3) * 5), WIFI_SECOND_CHAN_NONE));
 }
 
-void PwnagotchiApp::rotateChannel() {
+void PentagotchiApp::rotateChannel() {
     static const uint8_t kChannels[] = {1, 6, 11};
     constexpr size_t kChannelCount = sizeof(kChannels) / sizeof(kChannels[0]);
     currentChannelIndex = (currentChannelIndex + 1) % kChannelCount;
@@ -72,7 +72,7 @@ void PwnagotchiApp::rotateChannel() {
     }
 }
 
-void PwnagotchiApp::performDeauthCycle() {
+void PentagotchiApp::performDeauthCycle() {
     std::vector<BeaconEntry> snapshot;
     snapshot.reserve(gRegisteredBeacons.size());
     portENTER_CRITICAL(&gRadioMux);
@@ -119,7 +119,7 @@ void PwnagotchiApp::performDeauthCycle() {
     esp_wifi_set_channel(originalChannel, WIFI_SECOND_CHAN_NONE);
 }
 
-bool PwnagotchiApp::isItEapol(const wifi_promiscuous_pkt_t *packet) {
+bool PentagotchiApp::isItEapol(const wifi_promiscuous_pkt_t *packet) {
     const uint8_t *frame = packet->payload;
     const int len = packet->rx_ctrl.sig_len;
 
@@ -158,7 +158,7 @@ bool PwnagotchiApp::isItEapol(const wifi_promiscuous_pkt_t *packet) {
     return false;
 }
 
-void PwnagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
+void PentagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
     if (!gInstance) { return; }
 
     auto *packet = static_cast<wifi_promiscuous_pkt_t *>(buf);
@@ -198,8 +198,8 @@ void PwnagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_type
             if (frameSubtype & 0x08) { hdrLen += 2; }
             if (frame[1] & 0x80) { hdrLen += 4; }
             const uint8_t *llc = (packet->rx_ctrl.sig_len > hdrLen) ? frame + hdrLen : frame + 24;
-            Serial.printf(
-                "[pwnagotchi] data subtype=%u len=%u hdr=%u llc=%02X %02X %02X %02X %02X %02X %02X %02X\n",
+            SERIAL_PRINTF(
+                "[pentagotchi] data subtype=%u len=%u hdr=%u llc=%02X %02X %02X %02X %02X %02X %02X %02X\n",
                 static_cast<unsigned>(frameSubtype),
                 static_cast<unsigned>(packet->rx_ctrl.sig_len),
                 static_cast<unsigned>(hdrLen),
@@ -217,8 +217,8 @@ void PwnagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_type
 
     uint32_t now = millis();
     if (now - lastDump > 3000) {
-        Serial.printf(
-            "[pwnagotchi] promisc stats mgmt=%lu data=%lu ctrl=%lu candidates=%lu\n",
+        SERIAL_PRINTF(
+            "[pentagotchi] promisc stats mgmt=%lu data=%lu ctrl=%lu candidates=%lu\n",
             static_cast<unsigned long>(mgmtCount),
             static_cast<unsigned long>(dataCount),
             static_cast<unsigned long>(ctrlCount),
@@ -229,11 +229,16 @@ void PwnagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_type
     }
 
     if (isItEapol(packet)) {
-        ++gHandshakeCount;
-        gInstance->handshakePending = true;
         const uint8_t *dest = frame + 4;
         const uint8_t *src = frame + 10;
         const uint8_t *bssid = frame + 16;
+        uint64_t bssidKey = 0;
+        memcpy(&bssidKey, bssid, 6);
+        if (gHandshakeBssids.find(bssidKey) == gHandshakeBssids.end()) {
+            gHandshakeBssids.insert(bssidKey);
+            ++gHandshakeCount;
+            gInstance->handshakePending = true;
+        }
         char destMac[18] = {0};
         char srcMac[18] = {0};
         char bssidMac[18] = {0};
@@ -250,8 +255,8 @@ void PwnagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_type
             srcMac,
             destMac,
             bssidMac);
-        Serial.printf(
-            "[pwnagotchi] EAPOL #%d len=%u rssi=%d ch=%u src=%s dst=%s bssid=%s\n",
+        SERIAL_PRINTF(
+            "[pentagotchi] EAPOL #%d len=%u rssi=%d ch=%u src=%s dst=%s bssid=%s\n",
             gHandshakeCount,
             packet->rx_ctrl.sig_len,
             packet->rx_ctrl.rssi,

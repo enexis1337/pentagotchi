@@ -6,13 +6,13 @@
 #include <freertos/task.h>
 
 #include "pwn_ui.h"
-#include "pwnagotchi_config.h"
+#include "pentagotchi_config.h"
 
 class EInkDisplay;
 
-class PwnagotchiApp {
+class PentagotchiApp {
 public:
-    explicit PwnagotchiApp(EInkDisplay &display);
+    explicit PentagotchiApp(EInkDisplay &display);
 
     void begin();
     void loop();
@@ -41,5 +41,5 @@ private:
     bool storageReady{false};
     bool deauthEnabled{false};
     uint32_t startTime{0};
-    pwnagotchi_config_t config{};
+    pentagotchi_config_t config{};
 };
