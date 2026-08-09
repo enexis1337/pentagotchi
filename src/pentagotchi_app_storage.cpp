@@ -10,6 +10,8 @@
 
 using namespace pentagotchi::detail;
 
+static const String kHandshakeDir = "/Handshakes";
+
 static void ensure_dir_recursive(const String &path) {
     String cur;
     int start = 0;
@@ -44,8 +46,6 @@ void PentagotchiApp::ensureStorageReady() {
     if (!SD.begin(PIN_SD_CS, *spi)) {
         ESP_LOGW(kLogTag, "Failed to initialize SD card");
         SERIAL_PRINTLN("[pentagotchi] SD card initialization FAILED");
-        SERIAL_PRINTLN("[pentagotchi] Check wiring: CS->GPIO5, MOSI->GPIO11, MISO->GPIO13, SCK->GPIO12");
-        SERIAL_PRINTLN("[pentagotchi] Verify SD card is inserted and powered (3.3V)");
         return;
     }
     ESP_LOGI(kLogTag, "SD card initialized successfully");
@@ -74,10 +74,9 @@ void PentagotchiApp::saveHandshake(const wifi_promiscuous_pkt_t *packet) {
     const uint8_t *apAddr = (memcmp(addr1, bssid, 6) == 0) ? addr1 : addr2;
 
     String macStr = macToString(apAddr);
-    const String saveDir = String(config.saveDirectory);
-    ensure_dir_recursive(saveDir);
+    ensure_dir_recursive(kHandshakeDir);
 
-    String path = saveDir;
+    String path = kHandshakeDir;
     if (!path.endsWith("/")) { path += "/"; }
     path += "HS_" + macStr;
     path.replace(":", "");

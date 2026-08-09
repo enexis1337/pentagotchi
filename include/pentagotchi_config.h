@@ -44,7 +44,6 @@ typedef struct {
     } ai;
 
     // --- pwny ---
-    char saveDirectory[64];
     bool deauth_enabled;
     bool serial; // 0 = serial silent, 1 = serial output enabled
 } pentagotchi_config_t;

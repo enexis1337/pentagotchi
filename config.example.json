@@ -35,7 +35,6 @@
   },
 // настройки движка который ловит хэндшейки
   "pwny": {
-    "saveDirectory": "/sdcard/handshakes",
     "deauth_enabled": true,
   }
 }

@@ -72,8 +72,6 @@ void pentagotchi_config_set_defaults(pentagotchi_config_t *cfg) {
     cfg->ai.epochs_per_episode = 1;
     cfg->ai.min_rssi = -75;
 
-    strncpy(cfg->saveDirectory, "/sdcard/handshakes", sizeof(cfg->saveDirectory) - 1);
-    cfg->saveDirectory[sizeof(cfg->saveDirectory) - 1] = '\0';
     cfg->deauth_enabled = true;
     cfg->serial = false;
 }
@@ -158,9 +156,8 @@ bool pentagotchi_config_load(pentagotchi_config_t *cfg, bool sd_ready) {
 
     if (doc["pwny"].is<JsonObject>()) {
         JsonObject pwny = doc["pwny"];
-        copy_string(pwny["saveDirectory"] | cfg->saveDirectory, cfg->saveDirectory, sizeof(cfg->saveDirectory));
-        cfg->deauth_enabled = pwny["deauth_enabled"] | cfg->deauth_enabled;
-        cfg->serial = pwny["serial"] | cfg->serial;
+    cfg->deauth_enabled = pwny["deauth_enabled"] | cfg->deauth_enabled;
+    cfg->serial = pwny["serial"] | cfg->serial;
     }
 
     ESP_LOGI(kLogTag, "Loaded config from %s (name=%s lang=%s deauth=%d whitelist=%u)",
@@ -217,7 +214,6 @@ bool pentagotchi_config_save(const pentagotchi_config_t *cfg, bool sd_ready) {
     ai["min_rssi"] = cfg->ai.min_rssi;
 
     JsonObject pwny = doc["pwny"].to<JsonObject>();
-    pwny["saveDirectory"] = cfg->saveDirectory;
     pwny["deauth_enabled"] = cfg->deauth_enabled;
     pwny["serial"] = cfg->serial;
 
