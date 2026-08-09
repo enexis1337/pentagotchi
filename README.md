@@ -1,1 +1,1 @@
-# pentagotchi
+# `pentagotchi`
