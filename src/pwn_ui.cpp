@@ -87,16 +87,16 @@ static void pwn_ui_render(void)
     const int oneCharW = u8g2_GetStrWidth(&g_u8g2, "0");
 
     draw_labeled_value(PWN_X_CH, PWN_Y_CH, "CH", s_state.channel,
-                       u8g2_font_6x12_tf, u8g2_font_7x13_tf);
+                       u8g2_font_6x13B_tf, u8g2_font_7x13_tf);
     draw_labeled_value(PWN_X_APS, PWN_Y_APS, "APS", s_state.aps,
-                       u8g2_font_6x12_tf, u8g2_font_7x13_tf);
+                       u8g2_font_6x13B_tf, u8g2_font_7x13_tf);
     draw_labeled_value(PWN_X_UPTIME + oneCharW, PWN_Y_UPTIME, "UP", s_state.uptime,
-                       u8g2_font_6x12_tf, u8g2_font_7x13_tf);
+                       u8g2_font_6x13B_tf, u8g2_font_7x13_tf);
 
     u8g2_DrawHLine(&g_u8g2, 0, PWN_LINE1_Y, PWN_UI_W);
 
     // Name + prompt symbol, one character gap between them
-    u8g2_SetFont(&g_u8g2, u8g2_font_7x13_tf);
+    u8g2_SetFont(&g_u8g2, u8g2_font_7x13B_tf);
     u8g2_SetFontPosTop(&g_u8g2);
     u8g2_DrawStr(&g_u8g2, PWN_X_NAME, PWN_Y_NAME, s_state.name);
     int nameW = u8g2_GetStrWidth(&g_u8g2, s_state.name);
@@ -171,8 +171,8 @@ static void pwn_ui_render(void)
     u8g2_DrawHLine(&g_u8g2, 0, PWN_LINE2_Y, PWN_UI_W);
 
     draw_labeled_value(PWN_X_SHAKES, PWN_Y_SHAKES, "PWND", s_state.shakes,
-                       u8g2_font_6x12_tf, u8g2_font_7x13_tf);
-    draw_text(PWN_X_MODE, PWN_Y_MODE, s_state.mode, u8g2_font_7x13_tf);
+                       u8g2_font_6x13B_tf, u8g2_font_7x13_tf);
+    draw_text(PWN_X_MODE, PWN_Y_MODE, s_state.mode, u8g2_font_7x13B_tf);
 }
 
 void pwn_ui_set_channel(const char *val) { 
