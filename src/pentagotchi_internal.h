@@ -10,6 +10,7 @@
 #include <esp_wifi.h>
 #include <esp_wifi_types.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 // Global serial-output gate. When false, all Serial output is suppressed.
 extern bool gSerialEnabled;
@@ -37,7 +38,12 @@ struct PwngridPeer {
     String face;
     int rssi{-1000};
     unsigned long lastPing{0};
+    unsigned long lastEncounter{0};
     bool gone{false};
+    uint32_t uptime{0};
+    uint32_t pwndSession{0};
+    uint32_t pwndTotal{0};
+    uint32_t encounters{0};
 };
 
 struct PcapGlobalHeader {
@@ -71,6 +77,10 @@ constexpr uint8_t kMaxPeers = 50;
 constexpr uint32_t kUiRefreshMs = 500;
 constexpr uint32_t kScanCycleMs = 3000;
 constexpr uint32_t kStatsSaveIntervalMs = 10000;
+constexpr uint32_t kPeerTimeoutMs = 60000;
+constexpr uint32_t kEncounterTimeoutMs = 30000;
+constexpr uint8_t kFriendEncounters = 3;
+constexpr uint8_t kGridMac[6] = {0xde, 0xad, 0xbe, 0xef, 0xde, 0xad};
 constexpr uint32_t kMoodMinMs = 5000;
 constexpr uint32_t kMoodMaxMs = 15000;
 constexpr uint32_t kFullRefreshIntervalS = 1800;
@@ -86,6 +96,7 @@ constexpr wifi_promiscuous_filter_t kPromiscuousFilter = {
 
 extern portMUX_TYPE gRadioMux;
 extern PentagotchiApp *gInstance;
+extern SemaphoreHandle_t gPeersMutex;
 constexpr const char *kLogTag = "pentagotchi";
 
 extern std::set<BeaconEntry> gRegisteredBeacons;

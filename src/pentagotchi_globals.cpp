@@ -6,6 +6,7 @@ namespace pentagotchi::detail {
 
 portMUX_TYPE gRadioMux = portMUX_INITIALIZER_UNLOCKED;
 PentagotchiApp *gInstance = nullptr;
+SemaphoreHandle_t gPeersMutex = nullptr;
 std::set<BeaconEntry> gRegisteredBeacons;
 std::set<uint64_t> gHandshakeBssids;
 std::vector<PwngridPeer> gPeers;

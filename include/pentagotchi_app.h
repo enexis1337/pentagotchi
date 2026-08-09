@@ -8,6 +8,7 @@
 #include "pwn_ui.h"
 #include "pentagotchi_config.h"
 #include "pentagotchi_stats.h"
+#include "pentagotchi_grid.h"
 
 class EInkDisplay;
 

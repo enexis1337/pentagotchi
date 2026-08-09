@@ -34,6 +34,7 @@ static void check_dirty(void)
     if (str_changed(s_state.mode, s_prev.mode)) { s_dirty = true; strcpy(s_prev.mode, s_state.mode); }
     if (str_changed(s_state.friend_face, s_prev.friend_face)) { s_dirty = true; strcpy(s_prev.friend_face, s_state.friend_face); }
     if (str_changed(s_state.friend_name, s_prev.friend_name)) { s_dirty = true; strcpy(s_prev.friend_name, s_state.friend_name); }
+    if (s_state.friend_rssi != s_prev.friend_rssi) { s_dirty = true; s_prev.friend_rssi = s_state.friend_rssi; }
 }
 
 static void draw_labeled_value(int x, int y, const char *label, const char *value,
@@ -161,11 +162,37 @@ static void pwn_ui_render(void)
         sy += line_h;
     }
 
-    if (strlen(s_state.friend_face) > 0) {
-        draw_text(PWN_X_FRIEND_FACE, PWN_Y_FRIEND_FACE, s_state.friend_face, u8g2_font_6x10_tf);
-    }
-    if (strlen(s_state.friend_name) > 0) {
-        draw_text(PWN_X_FRIEND_NAME, PWN_Y_FRIEND_NAME, s_state.friend_name, u8g2_font_6x10_tf);
+    // Friend: face + signal bars + "name N (M)"
+    if (strlen(s_state.friend_face) > 0 || s_state.friend_rssi > -1000) {
+        int fx = PWN_X_FRIEND_FACE;
+        if (strlen(s_state.friend_face) > 0) {
+            draw_text(fx, PWN_Y_FRIEND_FACE, s_state.friend_face, u8g2_font_6x10_tf);
+            fx += u8g2_GetStrWidth(&g_u8g2, s_state.friend_face) + 4;
+        }
+
+        int bars = 0;
+        if (s_state.friend_rssi >= -55) bars = 4;
+        else if (s_state.friend_rssi >= -65) bars = 3;
+        else if (s_state.friend_rssi >= -75) bars = 2;
+        else if (s_state.friend_rssi >= -85) bars = 1;
+
+        if (bars > 0) {
+            for (int b = 0; b < 4; b++) {
+                int h = 4 + b * 3;
+                int yTop = PWN_Y_FRIEND_FACE + 12 - h;
+                if (b < bars) {
+                    u8g2_DrawBox(&g_u8g2, fx, yTop, 4, h);
+                } else {
+                    u8g2_DrawFrame(&g_u8g2, fx, yTop, 4, h);
+                }
+                fx += 7;
+            }
+            fx += 3;
+        }
+
+        if (strlen(s_state.friend_name) > 0) {
+            draw_text(fx, PWN_Y_FRIEND_FACE, s_state.friend_name, u8g2_font_6x10_tf);
+        }
     }
 
     u8g2_DrawHLine(&g_u8g2, 0, PWN_LINE2_Y, PWN_UI_W);
@@ -223,14 +250,20 @@ void pwn_ui_set_mode(const char *val) {
     eink_region_mark_dirty(REGION_MODE);
 }
 
-void pwn_ui_set_friend(const char *face, const char *name)
+void pwn_ui_set_friend(const char *face, const char *name, int rssi)
 {
     if (face) strncpy(s_state.friend_face, face, sizeof(s_state.friend_face) - 1);
     else s_state.friend_face[0] = '\0';
     if (name) strncpy(s_state.friend_name, name, sizeof(s_state.friend_name) - 1);
     else s_state.friend_name[0] = '\0';
+    s_state.friend_rssi = rssi;
     mark_dirty();
     eink_region_mark_dirty(REGION_FRIEND);
+}
+
+const char *pwn_ui_get_face(void)
+{
+    return s_state.face;
 }
 
 void pwn_ui_commit(void)
@@ -274,6 +307,7 @@ void pwn_ui_init(void)
     strcpy(s_state.status, "starting...");
     strcpy(s_state.shakes, "0 (00)");
     strcpy(s_state.mode, "AUTO");
+    s_state.friend_rssi = -1000;
 
     s_force = true;
     s_dirty = false;

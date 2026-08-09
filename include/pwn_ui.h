@@ -80,6 +80,7 @@ typedef struct {
     char mode[PWN_STR_LEN];
     char friend_face[PWN_FACE_LEN];
     char friend_name[PWN_FRIEND_NAME_LEN];
+    int friend_rssi;
 } pwn_ui_state_t;
 
 void pwn_ui_init(void);
@@ -91,7 +92,8 @@ void pwn_ui_set_name(const char *val);
 void pwn_ui_set_status(const char *val);
 void pwn_ui_set_shakes(const char *val);
 void pwn_ui_set_mode(const char *val);
-void pwn_ui_set_friend(const char *face, const char *name);
+void pwn_ui_set_friend(const char *face, const char *name, int rssi);
+const char *pwn_ui_get_face(void);
 
 void pwn_ui_commit(void);
 void pwn_ui_full_commit(void);

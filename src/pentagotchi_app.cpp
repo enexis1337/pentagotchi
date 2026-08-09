@@ -13,6 +13,8 @@ PentagotchiApp::PentagotchiApp(EInkDisplay &d) : display(d) {}
 void PentagotchiApp::begin() {
     gInstance = this;
 
+    gPeersMutex = xSemaphoreCreateMutex();
+
     display.begin();
 
     ensureStorageReady();
@@ -42,6 +44,7 @@ void PentagotchiApp::begin() {
     randomSeed(esp_random());
 
     pentagotchi_stats_load(&stats);
+    pentagotchi_grid_init(config.name, stats.total_pwnd);
     pwn_ui_init();
     eink_set_full_refresh_interval(kFullRefreshIntervalS);
     pwn_ui_set_name(config.name);
@@ -79,6 +82,12 @@ void PentagotchiApp::loop() {
 
     if (now - lastCycleTs > kScanCycleMs) {
         rotateChannel();
+
+        uint32_t elapsedSec = (millis() - startTime) / 1000;
+        pentagotchi_grid_update(elapsedSec, gHandshakeCount, stats.total_pwnd, pwn_ui_get_face());
+        pentagotchi_grid_send_beacon();
+        pentagotchi_grid_prune();
+
         updatePwnUiData();
         if (deauthEnabled) { performDeauthCycle(); }
         lastCycleTs = now;
@@ -180,10 +189,21 @@ void PentagotchiApp::updatePwnUiData() {
     snprintf(shakes, sizeof(shakes), "%d (%lu)", gHandshakeCount, (unsigned long)stats.total_pwnd);
     pwn_ui_set_shakes(shakes);
 
-    if (!gLastFriendName.isEmpty() && gTotalFriends > 0) {
-        pwn_ui_set_friend(PWN_FACE_FRIEND, gLastFriendName.c_str());
+    String closestFace, closestName;
+    uint32_t closestSession = 0, closestTotal = 0;
+    int closestRssi = -1000;
+    if (pentagotchi_grid_closest_peer(closestFace, closestName, closestSession, closestTotal, closestRssi)) {
+        char friendBuf[PWN_FRIEND_NAME_LEN];
+        if (!closestName.isEmpty()) {
+            snprintf(friendBuf, sizeof(friendBuf), "%s %lu (%lu)", closestName.c_str(),
+                     (unsigned long)closestSession, (unsigned long)closestTotal);
+        } else {
+            snprintf(friendBuf, sizeof(friendBuf), "%lu (%lu)", (unsigned long)closestSession,
+                     (unsigned long)closestTotal);
+        }
+        pwn_ui_set_friend(closestFace.isEmpty() ? PWN_FACE_FRIEND : closestFace.c_str(), friendBuf, closestRssi);
     } else {
-        pwn_ui_set_friend(nullptr, nullptr);
+        pwn_ui_set_friend(nullptr, nullptr, -1000);
     }
 }
 

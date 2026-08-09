@@ -270,59 +270,18 @@ void PentagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_typ
     }
 
     if (frameType == 0x00 && frameSubtype == 0x08) {
-        BeaconEntry entry;
         const uint8_t *sender = frame + 10;
-        memcpy(entry.mac, sender, sizeof(entry.mac));
-        entry.channel = readWifiChannel();
-        portENTER_CRITICAL(&gRadioMux);
-        auto inserted = gRegisteredBeacons.insert(entry);
-        portEXIT_CRITICAL(&gRadioMux);
-        if (inserted.second) {
-            ++gInstance->stats.total_aps;
-            ++gInstance->statsChanges;
-        }
-    }
-
-    if (type == WIFI_PKT_MGMT && frameType == 0x00 && frameSubtype == 0x08) {
-        const uint8_t *src = frame + 10;
-        if (src[0] == 0xde && src[1] == 0xad && src[2] == 0xbe && src[3] == 0xef && src[4] == 0xde &&
-            src[5] == 0xad) {
-            String payload;
-            const int len = packet->rx_ctrl.sig_len - 4;
-            for (int i = 38; i < len; ++i) {
-                uint8_t c = frame[i];
-                if (c >= 32 && c <= 126) { payload += static_cast<char>(c); }
+        if (!pentagotchi_grid_handle_mgmt(packet)) {
+            BeaconEntry entry;
+            memcpy(entry.mac, sender, sizeof(entry.mac));
+            entry.channel = readWifiChannel();
+            portENTER_CRITICAL(&gRadioMux);
+            auto inserted = gRegisteredBeacons.insert(entry);
+            portEXIT_CRITICAL(&gRadioMux);
+            if (inserted.second) {
+                ++gInstance->stats.total_aps;
+                ++gInstance->statsChanges;
             }
-
-            if (payload.isEmpty()) { return; }
-
-            JsonDocument doc;
-            if (deserializeJson(doc, payload) != DeserializationError::Ok) { return; }
-
-            PwngridPeer peer;
-            peer.identity = doc["identity"].as<String>();
-            peer.name = doc["name"].as<String>();
-            peer.face = doc["face"].as<String>();
-            peer.rssi = packet->rx_ctrl.rssi;
-            peer.lastPing = millis();
-            peer.gone = false;
-
-            bool exists = false;
-            for (auto &existing : gPeers) {
-                if (existing.identity == peer.identity) {
-                    existing = peer;
-                    exists = true;
-                    break;
-                }
-            }
-
-            if (!exists && gPeers.size() < kMaxPeers) {
-                gPeers.push_back(peer);
-                gTotalFriends = gPeers.size();
-                gLastFriendName = peer.name;
-            }
-
-            if (peer.rssi > gClosestRssi) { gClosestRssi = peer.rssi; }
         }
     }
 }
