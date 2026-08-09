@@ -41,6 +41,7 @@ void PentagotchiApp::begin() {
 
     randomSeed(esp_random());
 
+    pentagotchi_stats_load(&stats);
     pwn_ui_init();
     eink_set_full_refresh_interval(kFullRefreshIntervalS);
     pwn_ui_set_name(config.name);
@@ -60,10 +61,12 @@ void PentagotchiApp::begin() {
 void PentagotchiApp::loop() {
     const uint32_t now = millis();
 
+    handleSerialCommands();
+
     if (handshakePending) {
         handshakePending = false;
         char shakes[16];
-        snprintf(shakes, sizeof(shakes), "%d (%d)", gHandshakeCount, gHandshakeCount);
+        snprintf(shakes, sizeof(shakes), "%d (%lu)", gHandshakeCount, (unsigned long)stats.total_pwnd);
         pwn_ui_set_shakes(shakes);
         pwn_ui_on_handshake();
     }
@@ -92,6 +95,50 @@ void PentagotchiApp::loop() {
         updateUi(false);
         lastUi = now;
     }
+
+    // Throttled NVS flush of persistent counters (avoids flash wear)
+    if (now - lastStatsFlush >= kStatsSaveIntervalMs) {
+        if (statsChanges != 0) {
+            pentagotchi_stats_save(&stats);
+            statsChanges = 0;
+        }
+        lastStatsFlush = now;
+    }
+}
+
+void PentagotchiApp::handleSerialCommands() {
+    static char line[64];
+    static size_t len = 0;
+
+    while (Serial.available() > 0) {
+        char c = static_cast<char>(Serial.read());
+        if (c == '\n' || c == '\r') {
+            if (len == 0) { continue; }
+            line[len] = '\0';
+
+            // Trim leading/trailing whitespace
+            char *start = line;
+            char *end = line + len - 1;
+            while (start < end && (*start == ' ' || *start == '\t')) { ++start; }
+            while (end > start && (*end == ' ' || *end == '\t')) { --end; }
+            end[1] = '\0';
+
+            if (strcmp(start, "clearstats") == 0) {
+                stats.total_aps = 0;
+                stats.total_pwnd = 0;
+                statsChanges = 0;
+                pentagotchi_stats_save(&stats);
+                pwn_ui_force_update();
+                Serial.println("> stats cleared");
+                SERIAL_PRINTLN("[pentagotchi] stats cleared");
+            } else {
+                Serial.printf("> unknown command: %s\n", start);
+            }
+            len = 0;
+        } else if (len < sizeof(line) - 1) {
+            line[len++] = c;
+        }
+    }
 }
 
 void PentagotchiApp::updateUptime() {
@@ -110,8 +157,15 @@ void PentagotchiApp::updatePwnUiData() {
     snprintf(buf, sizeof(buf), "%u", ch);
     pwn_ui_set_channel(buf);
 
+    size_t currentChannelAps = 0;
+    portENTER_CRITICAL(&gRadioMux);
+    for (const auto &entry : gRegisteredBeacons) {
+        if (entry.channel == ch) { ++currentChannelAps; }
+    }
+    portEXIT_CRITICAL(&gRadioMux);
+
     char aps[24];
-    snprintf(aps, sizeof(aps), "%zu (%u)", gRegisteredBeacons.size(), gTotalFriends);
+    snprintf(aps, sizeof(aps), "%zu (%lu)", currentChannelAps, (unsigned long)stats.total_aps);
     pwn_ui_set_aps(aps);
 
     uint32_t elapsed = (millis() - startTime) / 1000;
@@ -123,7 +177,7 @@ void PentagotchiApp::updatePwnUiData() {
     pwn_ui_set_uptime(uptime);
 
     char shakes[16];
-    snprintf(shakes, sizeof(shakes), "%d (%d)", gHandshakeCount, gHandshakeCount);
+    snprintf(shakes, sizeof(shakes), "%d (%lu)", gHandshakeCount, (unsigned long)stats.total_pwnd);
     pwn_ui_set_shakes(shakes);
 
     if (!gLastFriendName.isEmpty() && gTotalFriends > 0) {

@@ -7,6 +7,7 @@
 
 #include "pwn_ui.h"
 #include "pentagotchi_config.h"
+#include "pentagotchi_stats.h"
 
 class EInkDisplay;
 
@@ -16,6 +17,7 @@ public:
 
     void begin();
     void loop();
+    void handleSerialCommands();
 
     EInkDisplay &display;
     volatile bool handshakePending{false};
@@ -42,4 +44,7 @@ private:
     bool deauthEnabled{false};
     uint32_t startTime{0};
     pentagotchi_config_t config{};
+    pentagotchi_stats_t stats{};
+    uint32_t statsChanges{0};
+    uint32_t lastStatsFlush{0};
 };
