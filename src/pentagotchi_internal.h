@@ -70,6 +70,7 @@ constexpr uint8_t PIN_SD_CS   = 5;
 constexpr uint8_t kMaxPeers = 50;
 constexpr uint32_t kUiRefreshMs = 500;
 constexpr uint32_t kScanCycleMs = 3000;
+constexpr uint32_t kStatsSaveIntervalMs = 10000;
 constexpr uint32_t kMoodMinMs = 5000;
 constexpr uint32_t kMoodMaxMs = 15000;
 constexpr uint32_t kFullRefreshIntervalS = 1800;

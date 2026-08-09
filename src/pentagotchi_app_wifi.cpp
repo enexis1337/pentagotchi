@@ -237,6 +237,8 @@ void PentagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_typ
         if (gHandshakeBssids.find(bssidKey) == gHandshakeBssids.end()) {
             gHandshakeBssids.insert(bssidKey);
             ++gHandshakeCount;
+            ++gInstance->stats.total_pwnd;
+            ++gInstance->statsChanges;
             gInstance->handshakePending = true;
         }
         char destMac[18] = {0};
@@ -273,8 +275,12 @@ void PentagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_typ
         memcpy(entry.mac, sender, sizeof(entry.mac));
         entry.channel = readWifiChannel();
         portENTER_CRITICAL(&gRadioMux);
-        gRegisteredBeacons.insert(entry);
+        auto inserted = gRegisteredBeacons.insert(entry);
         portEXIT_CRITICAL(&gRadioMux);
+        if (inserted.second) {
+            ++gInstance->stats.total_aps;
+            ++gInstance->statsChanges;
+        }
     }
 
     if (type == WIFI_PKT_MGMT && frameType == 0x00 && frameSubtype == 0x08) {
