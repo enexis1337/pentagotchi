@@ -36,6 +36,9 @@ void PentagotchiApp::begin() {
         eink_set_rotation(0);
     }
 
+    // Invert colors when ui.display.color = black
+    eink_set_invert(strncmp(config.display.color, "black", 5) == 0);
+
     randomSeed(esp_random());
 
     pwn_ui_init();

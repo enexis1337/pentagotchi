@@ -20,6 +20,7 @@ static const char *TAG = "eink";
 static GxEPD2_213_GDEY0213B74 *s_display = nullptr;
 static SPIClass *s_spi = nullptr;
 static int s_rotation = 0;
+static bool s_invert = false;
 static int64_t s_last_full_refresh_us = 0;
 static int64_t s_last_refresh_us = 0;
 static uint32_t s_full_refresh_interval_sec = 600;
@@ -65,20 +66,19 @@ static void u8g2_to_gxepd2(void)
 
     for (int uy = 0; uy < EINK_HEIGHT; uy++) {
         int u8_row_offset = uy * 32; // u8g2: 32 bytes per row (250/8 rounded up)
-        for (int ux = 0; ux < EINK_WIDTH; ux++) {
-            int u8_idx = (ux >> 3) + u8_row_offset;
-            int u8_bit = 7 - (ux & 7);
-            if (g_u8g2_buf[u8_idx] & (1 << u8_bit)) {
-                continue;
-            }
-            // Rotated mapping: gx = uy, gy = ux, horizontal flip
-            int gy = EINK_HEIGHT - 1 - uy;
-            int gx_idx = (gy >> 3) + ux * GX_BYTES_PER_ROW;
-            int gx_bit = 7 - (gy & 7);
-            if (gx_idx < GX_BUF_SIZE) {
-                s_gx_buf[gx_idx] &= ~(1 << gx_bit);
-            }
+for (int ux = 0; ux < EINK_WIDTH; ux++) {
+        int u8_idx = (ux >> 3) + u8_row_offset;
+        int u8_bit = 7 - (ux & 7);
+        bool pixelWhite = (g_u8g2_buf[u8_idx] & (1 << u8_bit)) != 0;
+        if (pixelWhite != s_invert) { continue; }
+        // Rotated mapping: gx = uy, gy = ux, horizontal flip
+        int gy = EINK_HEIGHT - 1 - uy;
+        int gx_idx = (gy >> 3) + ux * GX_BYTES_PER_ROW;
+        int gx_bit = 7 - (gy & 7);
+        if (gx_idx < GX_BUF_SIZE) {
+            s_gx_buf[gx_idx] &= ~(1 << gx_bit);
         }
+    }
     }
 }
 
@@ -163,6 +163,13 @@ esp_err_t eink_set_rotation(int rotation)
         u8g2_SetDisplayRotation(&g_u8g2, U8G2_R0);
     }
     ESP_LOGI(TAG, "Rotation set to %d", rotation);
+    return ESP_OK;
+}
+
+esp_err_t eink_set_invert(bool invert)
+{
+    s_invert = invert;
+    ESP_LOGI(TAG, "Invert mode set to %d", invert ? 1 : 0);
     return ESP_OK;
 }
 

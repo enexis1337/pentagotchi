@@ -22,6 +22,7 @@ esp_err_t eink_refresh(void);  // Partial refresh (быстро, без мерц
 esp_err_t eink_full_refresh(void);  // Full refresh (медленно, с мерцанием)
 esp_err_t eink_set_rotation(int rotation);
 void eink_deinit(void);
+esp_err_t eink_set_invert(bool invert);
 
 // Управление режимом обновления
 void eink_set_full_refresh_interval(uint32_t seconds);  // Установить интервал full refresh (по умолчанию 600 сек = 10 мин)
