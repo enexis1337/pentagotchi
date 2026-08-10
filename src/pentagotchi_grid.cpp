@@ -1,5 +1,6 @@
 #include "pentagotchi_grid.h"
 
+#include "pentagotchi_events.h"
 #include "pentagotchi_internal.h"
 
 #include <ArduinoJson.h>
@@ -128,12 +129,15 @@ esp_err_t pentagotchi_grid_send_beacon(void) {
     memcpy(frame, kBeaconHeader, sizeof(kBeaconHeader));
 
     size_t frameLen = sizeof(kBeaconHeader);
+    // One AC (0xde) + length header, then the whole JSON contiguous.
+    // We deliberately do NOT repeat 0xde headers every 255 bytes like pal SPAM:
+    // sniffers such as WiFi Marauder slice the RAW bytes between the first '{'
+    // and the last '}' of the frame, so embedded headers would corrupt the JSON
+    // (InvalidInput). pal/Bruce receivers skip non-ASCII bytes and only ever see
+    // the JSON payload, so a single leading header is all they need.
+    frame[frameLen++] = 0xde;
+    frame[frameLen++] = static_cast<uint8_t>(jsonLen < 255 ? jsonLen : 255);
     for (size_t i = 0; i < jsonLen; ++i) {
-        // AC (0xde) + length header before every 255 bytes, like pal beacons
-        if (i == 0 || i % 255 == 0) {
-            frame[frameLen++] = 0xde;
-            frame[frameLen++] = static_cast<uint8_t>((jsonLen - i < 255) ? (jsonLen - i) : 255);
-        }
         frame[frameLen++] = static_cast<uint8_t>(jsonStr[i]);
     }
 
@@ -171,6 +175,17 @@ static void addOrUpdatePeer(const PwngridPeer &peer) {
             if (newEncounter) {
                 SERIAL_PRINTF("[pentagotchi] peer %s encounter #%lu (%d dBm)\n", existing.identity.c_str(),
                               (unsigned long)existing.encounters, existing.rssi);
+
+                String who = existing.name.isEmpty() ? existing.identity : existing.name;
+                pwn_event_t ev = {};
+                ev.str = who.c_str();
+                ev.value = existing.encounters;
+                ev.rssi = existing.rssi;
+                pwn_events_raise(PWN_EVENT_PEER_ENCOUNTER, &ev);
+
+                if (existing.encounters == kFriendEncounters) {
+                    pwn_events_raise(PWN_EVENT_FRIEND, &ev);
+                }
             }
             existingNotFound = false;
             break;
@@ -188,6 +203,12 @@ static void addOrUpdatePeer(const PwngridPeer &peer) {
 
         ESP_LOGI(TAG, "new peer detected: %s@%s (%d dBm)", p.name.c_str(), p.identity.c_str(), p.rssi);
         SERIAL_PRINTF("[pentagotchi] NEW PEER %s@%s (%d dBm)\n", p.name.c_str(), p.identity.c_str(), p.rssi);
+
+        String who = p.name.isEmpty() ? p.identity : p.name;
+        pwn_event_t ev = {};
+        ev.str = who.c_str();
+        ev.rssi = p.rssi;
+        pwn_events_raise(PWN_EVENT_PEER_DETECTED, &ev);
     }
 
     if (gPeersMutex) { xSemaphoreGive(gPeersMutex); }
@@ -244,6 +265,12 @@ void pentagotchi_grid_prune(void) {
     for (auto it = gPeers.begin(); it != gPeers.end();) {
         if ((now - it->lastPing) > kPeerTimeoutMs || it->gone) {
             SERIAL_PRINTF("[pentagotchi] LOST PEER %s@%s\n", it->name.c_str(), it->identity.c_str());
+
+            String who = it->name.isEmpty() ? it->identity : it->name;
+            pwn_event_t ev = {};
+            ev.str = who.c_str();
+            pwn_events_raise(PWN_EVENT_PEER_GONE, &ev);
+
             it = gPeers.erase(it);
         } else {
             ++it;

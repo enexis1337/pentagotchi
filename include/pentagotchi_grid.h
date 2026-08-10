@@ -8,8 +8,10 @@
 //
 // Beacons use the pal/pwngrid-compatible format shared with Bruce/PwnGridSpam
 // units and the original pwnagotchi ecosystem: spoofed MAC DE:AD:BE:EF:DE:AD,
-// the advertisement JSON chunked with 0xde+len "AC" headers, all printable
-// ASCII payload after offset 38.
+// one AC (0xde + len) header then the full advertisement JSON as printable
+// ASCII after offset 38. The JSON is sent contiguous (no per-255-byte AC
+// headers) so WiFi Marauder, which slices the raw bytes between the first '{'
+// and the last '}', can parse it; pal/Bruce receivers skip non-ASCII bytes.
 
 #ifdef __cplusplus
 extern "C" {
