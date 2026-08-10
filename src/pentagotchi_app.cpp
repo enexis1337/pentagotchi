@@ -1,6 +1,7 @@
 #include "pentagotchi_app.h"
 
 #include "eink_display.h"
+#include "pentagotchi_events.h"
 #include "pentagotchi_internal.h"
 
 #include <esp_log.h>
@@ -8,12 +9,44 @@
 
 using namespace pentagotchi::detail;
 
+namespace {
+
+// "PWND" line value: "N (M)" plus " [Name]" when we captured the last handshake.
+// Capped so it does not collide with the MODE column on the screen.
+void buildShakesLine(char *out, size_t outLen, int session, unsigned long total, const char *attack) {
+    char base[24];
+    snprintf(base, sizeof(base), "%d (%lu)", session, total);
+    const size_t baseLen = strlen(base);
+    const size_t kMaxLine = 30;
+
+    size_t nameCap = 0;
+    if (attack && attack[0]) {
+        const size_t room = (kMaxLine > baseLen + 3) ? (kMaxLine - baseLen - 3) : 0;
+        nameCap = room < 32 ? room : 32;
+    }
+
+    if (nameCap == 0) {
+        snprintf(out, outLen, "%s", base);
+        return;
+    }
+
+    char name[33];
+    const size_t copy = strlen(attack) < nameCap ? strlen(attack) : nameCap;
+    memcpy(name, attack, copy);
+    name[copy] = '\0';
+
+    snprintf(out, outLen, "%s [%s]", base, name);
+}
+
+} // namespace
+
 PentagotchiApp::PentagotchiApp(EInkDisplay &d) : display(d) {}
 
 void PentagotchiApp::begin() {
     gInstance = this;
 
     gPeersMutex = xSemaphoreCreateMutex();
+    pwn_events_init();
 
     display.begin();
 
@@ -46,6 +79,7 @@ void PentagotchiApp::begin() {
     pentagotchi_stats_load(&stats);
     pentagotchi_grid_init(config.name, stats.total_pwnd);
     pwn_ui_init();
+    pwn_ui_bind_events();
     eink_set_full_refresh_interval(kFullRefreshIntervalS);
     pwn_ui_set_name(config.name);
     pwn_ui_on_starting();
@@ -54,10 +88,8 @@ void PentagotchiApp::begin() {
     deauthEnabled = config.deauth_enabled;
 
     initWifi();
-    wakeAnimation();
+    pwn_events_raise_simple(PWN_EVENT_BOOT);
     lastCycleTs = millis();
-    lastMoodSwitch = millis();
-    randomMoodInterval = kMoodMinMs;
     startTime = millis();
 }
 
@@ -68,16 +100,14 @@ void PentagotchiApp::loop() {
 
     if (handshakePending) {
         handshakePending = false;
-        char shakes[16];
-        snprintf(shakes, sizeof(shakes), "%d (%lu)", gHandshakeCount, (unsigned long)stats.total_pwnd);
+        char shakes[PWN_STR_LEN];
+        buildShakesLine(shakes, sizeof(shakes), gHandshakeCount, (unsigned long)stats.total_pwnd,
+                        gLastPwndName.c_str());
         pwn_ui_set_shakes(shakes);
-        pwn_ui_on_handshake();
-    }
 
-    if (now - lastMoodSwitch > randomMoodInterval) {
-        triggerRandomMood();
-        lastMoodSwitch = now;
-        randomMoodInterval = kMoodMinMs + (kMoodMaxMs > kMoodMinMs ? esp_random() % (kMoodMaxMs - kMoodMinMs) : 0);
+        pwn_event_t ev = {};
+        ev.value = gHandshakeCount;
+        pwn_events_raise(PWN_EVENT_HANDSHAKE, &ev);
     }
 
     if (now - lastCycleTs > kScanCycleMs) {
@@ -90,6 +120,11 @@ void PentagotchiApp::loop() {
 
         updatePwnUiData();
         if (deauthEnabled) { performDeauthCycle(); }
+
+        pwn_event_t ev = {};
+        ev.value = readWifiChannel();
+        pwn_events_raise(PWN_EVENT_SCAN_CYCLE, &ev);
+
         lastCycleTs = now;
     }
 
@@ -137,9 +172,20 @@ void PentagotchiApp::handleSerialCommands() {
                 stats.total_pwnd = 0;
                 statsChanges = 0;
                 pentagotchi_stats_save(&stats);
-                pwn_ui_force_update();
                 Serial.println("> stats cleared");
                 SERIAL_PRINTLN("[pentagotchi] stats cleared");
+                pwn_events_raise_simple(PWN_EVENT_STATS_CLEARED);
+            } else if (strcmp(start, "events") == 0) {
+                for (int e = 0; e < PWN_EVENT_COUNT; ++e) {
+                    Serial.printf(">  %-16s fired=%lu\n", pwn_events_name(static_cast<pwn_event_id_t>(e)),
+                                  (unsigned long)pwn_events_fired(static_cast<pwn_event_id_t>(e)));
+                }
+                size_t handlers = pwn_events_handler_count();
+                Serial.printf(">  %u handler(s):\n", static_cast<unsigned>(handlers));
+                for (uint32_t i = 0; i < handlers; ++i) {
+                    Serial.printf(">    %-16s -> %s\n", pwn_events_name(pwn_events_handler_id(i)),
+                                  pwn_events_handler_tag(i));
+                }
             } else {
                 Serial.printf("> unknown command: %s\n", start);
             }
@@ -185,8 +231,9 @@ void PentagotchiApp::updatePwnUiData() {
     snprintf(uptime, sizeof(uptime), "%02u:%02u:%02u", hh, mm, ss);
     pwn_ui_set_uptime(uptime);
 
-    char shakes[16];
-    snprintf(shakes, sizeof(shakes), "%d (%lu)", gHandshakeCount, (unsigned long)stats.total_pwnd);
+    char shakes[PWN_STR_LEN];
+    buildShakesLine(shakes, sizeof(shakes), gHandshakeCount, (unsigned long)stats.total_pwnd,
+                    gLastPwndName.c_str());
     pwn_ui_set_shakes(shakes);
 
     String closestFace, closestName;
@@ -205,31 +252,4 @@ void PentagotchiApp::updatePwnUiData() {
     } else {
         pwn_ui_set_friend(nullptr, nullptr, -1000);
     }
-}
-
-void PentagotchiApp::triggerRandomMood() {
-    const int r = esp_random() % 6;
-    switch (r) {
-        case 0: pwn_ui_on_normal(); break;
-        case 1: pwn_ui_on_bored();  break;
-        case 2: pwn_ui_on_sad();    break;
-        case 3: pwn_ui_on_lonely(); break;
-        case 4: pwn_ui_on_excited(); break;
-        case 5: pwn_ui_on_motivated(); break;
-    }
-}
-
-void PentagotchiApp::wakeAnimation() {
-    pwn_ui_set_face(PWN_FACE_SLEEP);
-    pwn_ui_set_status("Waking up...");
-    pwn_ui_full_commit();
-    delay(300);
-
-    pwn_ui_set_face(PWN_FACE_AWAKE);
-    pwn_ui_set_status("Hello! I'm pentagotchi");
-    pwn_ui_full_commit();
-    delay(300);
-
-    pwn_ui_on_normal();
-    pwn_ui_full_commit();
 }

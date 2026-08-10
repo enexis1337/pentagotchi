@@ -13,7 +13,7 @@ extern "C" {
 #define PWN_FACE_LEN       24
 #define PWN_NAME_LEN       24
 #define PWN_STATUS_LEN     128
-#define PWN_STR_LEN        24
+#define PWN_STR_LEN        40
 #define PWN_FRIEND_NAME_LEN 64
 
 // Layout positions (matching original pentagotchi Waveshare V2/V3 black, 250x122)
@@ -40,7 +40,7 @@ extern "C" {
 #define PWN_X_MODE       220
 #define PWN_Y_MODE       109
 #define PWN_LINE1_Y      14
-#define PWN_LINE2_Y      108
+#define PWN_LINE2_Y      107
 
 // Pentagotchi-style ASCII faces (all plain ASCII, renderable by ANY u8g2 font)
 #define PWN_FACE_LOOK_R       "( o_o)"
@@ -109,6 +109,9 @@ void pwn_ui_on_lonely(void);
 void pwn_ui_on_excited(void);
 void pwn_ui_on_motivated(void);
 void pwn_ui_on_starting(void);
+
+// Subscribe the UI's reactions to the firmware event bus (call after pwn_ui_init).
+void pwn_ui_bind_events(void);
 
 #ifdef __cplusplus
 }

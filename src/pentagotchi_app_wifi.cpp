@@ -1,5 +1,6 @@
 #include "pentagotchi_app.h"
 
+#include "pentagotchi_events.h"
 #include "pentagotchi_internal.h"
 
 #include <ArduinoJson.h>
@@ -70,6 +71,10 @@ void PentagotchiApp::rotateChannel() {
     if (esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE) != ESP_OK) {
         ESP_LOGW(kLogTag, "Failed to set channel %u", channel);
     }
+
+    pwn_event_t ev = {};
+    ev.value = channel;
+    pwn_events_raise(PWN_EVENT_CHANNEL_CHANGED, &ev);
 }
 
 void PentagotchiApp::performDeauthCycle() {
@@ -113,7 +118,11 @@ void PentagotchiApp::performDeauthCycle() {
                 ESP_LOGW(kLogTag, "Deauth tx failed on STA iface: %s", esp_err_to_name(err));
             }
         }
-        pwn_ui_on_deauth(macStr);
+
+        pwn_event_t ev = {};
+        ev.mac = entry.mac;
+        ev.str = entry.ssid[0] ? entry.ssid : macStr;
+        pwn_events_raise(PWN_EVENT_DEAUTH_SENT, &ev);
     }
 
     esp_wifi_set_channel(originalChannel, WIFI_SECOND_CHAN_NONE);
@@ -240,6 +249,18 @@ void PentagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_typ
             ++gInstance->stats.total_pwnd;
             ++gInstance->statsChanges;
             gInstance->handshakePending = true;
+
+            // Remember the name of the AP this handshake belongs to
+            char pwndNet[33] = {0};
+            portENTER_CRITICAL(&gRadioMux);
+            for (const auto &be : gRegisteredBeacons) {
+                if (memcmp(be.mac, bssid, 6) == 0) {
+                    memcpy(pwndNet, be.ssid, sizeof(pwndNet));
+                    break;
+                }
+            }
+            portEXIT_CRITICAL(&gRadioMux);
+            gLastPwndName = pwndNet;
         }
         char destMac[18] = {0};
         char srcMac[18] = {0};
@@ -275,12 +296,34 @@ void PentagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_typ
             BeaconEntry entry;
             memcpy(entry.mac, sender, sizeof(entry.mac));
             entry.channel = readWifiChannel();
+
+            // Extract the SSID from Tag 0 (first IE) of the beacon
+            const size_t frameLen = static_cast<size_t>(packet->rx_ctrl.sig_len) - 4; // drop FCS
+            size_t pos = 36;
+            while (pos + 2 <= frameLen) {
+                const uint8_t tag = frame[pos];
+                const uint8_t tagLen = frame[pos + 1];
+                if (pos + 2 + tagLen > frameLen) { break; }
+                if (tag == 0) {
+                    const size_t sl = std::min<size_t>(tagLen, sizeof(entry.ssid) - 1);
+                    memcpy(entry.ssid, frame + pos + 2, sl);
+                    entry.ssid[sl] = '\0';
+                    break;
+                }
+                pos += 2 + tagLen;
+            }
+
             portENTER_CRITICAL(&gRadioMux);
             auto inserted = gRegisteredBeacons.insert(entry);
             portEXIT_CRITICAL(&gRadioMux);
             if (inserted.second) {
                 ++gInstance->stats.total_aps;
                 ++gInstance->statsChanges;
+
+                pwn_event_t ev = {};
+                ev.value = entry.channel;
+                ev.mac = entry.mac;
+                pwn_events_raise(PWN_EVENT_AP_DETECTED, &ev);
             }
         }
     }

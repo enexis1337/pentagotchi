@@ -24,6 +24,7 @@ namespace pentagotchi::detail {
 struct BeaconEntry {
     uint8_t mac[6]{};
     uint8_t channel{0};
+    char ssid[33]{};
 
     bool operator<(const BeaconEntry &other) const {
         int cmp = memcmp(mac, other.mac, sizeof(mac));
@@ -81,8 +82,6 @@ constexpr uint32_t kPeerTimeoutMs = 60000;
 constexpr uint32_t kEncounterTimeoutMs = 30000;
 constexpr uint8_t kFriendEncounters = 3;
 constexpr uint8_t kGridMac[6] = {0xde, 0xad, 0xbe, 0xef, 0xde, 0xad};
-constexpr uint32_t kMoodMinMs = 5000;
-constexpr uint32_t kMoodMaxMs = 15000;
 constexpr uint32_t kFullRefreshIntervalS = 1800;
 constexpr uint8_t kTxPowerDefault = 72;
 
@@ -104,6 +103,7 @@ extern std::set<uint64_t> gHandshakeBssids;
 extern std::vector<PwngridPeer> gPeers;
 extern uint8_t gTotalFriends;
 extern String gLastFriendName;
+extern String gLastPwndName;
 extern int gClosestRssi;
 extern int gHandshakeCount;
 

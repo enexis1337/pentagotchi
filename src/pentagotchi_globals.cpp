@@ -12,6 +12,7 @@ std::set<uint64_t> gHandshakeBssids;
 std::vector<PwngridPeer> gPeers;
 uint8_t gTotalFriends = 0;
 String gLastFriendName;
+String gLastPwndName;
 int gClosestRssi = -1000;
 int gHandshakeCount = 0;
 

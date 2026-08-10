@@ -1,9 +1,11 @@
 #include <string.h>
 #include <stdio.h>
 #include "esp_log.h"
+#include "esp_random.h"
 #include "eink_display.h"
 #include "eink_regions.h"
 #include "pwn_ui.h"
+#include "pentagotchi_events.h"
 
 static const char *TAG = "pwn_ui";
 
@@ -64,20 +66,28 @@ static void draw_text(int x, int y, const char *text, const uint8_t *font)
 }
 
 // True if the token at p is a full MAC address "AA:BB:CC:DD:EE:FF" (17 chars)
+static bool is_mac_byte(char c)
+{
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+static bool is_mac_punct(char c)
+{
+    return c == ',' || c == '.' || c == '!' || c == '?' || c == ':' || c == ';' ||
+           c == '\'' || c == '"' || c == ')';
+}
+
 static bool is_mac_token(const char *p)
 {
     if (!p) return false;
     for (int g = 0; g < 6; g++) {
         for (int i = 0; i < 2; i++) {
-            char c = p[g * 3 + i];
-            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
-                return false;
-            }
+            if (!is_mac_byte(p[g * 3 + i])) return false;
         }
         if (g < 5 && p[g * 3 + 2] != ':') return false;
     }
     char n = p[17];
-    return n == '\0' || n == ' ' || n == '\n';
+    return n == '\0' || n == ' ' || n == '\n' || is_mac_punct(n);
 }
 
 static void pwn_ui_render(void)
@@ -121,9 +131,11 @@ static void pwn_ui_render(void)
 
         int i = 0;
         if (is_mac_token(p)) {
-            // MAC address always on its own (new) line, never split
+            // MAC (plus trailing punctuation) always on its own line, never split
             for (int k = 0; k < 17 && p[k]; k++) lines[n][i++] = p[k];
-            p += 17;
+            int k = 17;
+            while (p[k] && is_mac_punct(p[k])) lines[n][i++] = p[k++];
+            p += k;
         } else {
             int j = 0;
             // Skip leading spaces of the whole phrase (never between tokens)
@@ -319,18 +331,51 @@ void pwn_ui_init(void)
     ESP_LOGI(TAG, "UI initialized (%dx%d)", PWN_UI_W, PWN_UI_H);
 }
 
+static const char *const kHandshakePhrases[] = {
+    "Yay! I got a\nnew present!",
+    "High five!\nGot the handshake!",
+    "Aww, someone shared\na secret with me!",
+    "Got it!\nWe're officially\nbest friends!",
+    "Yay, another souvenir\nfor my collection!",
+    "Heart captured! <3",
+    "Mmm, fresh packets!",
+    "Oops, someone dropped\ntheir keys!",
+    "Yoink! Mine now!",
+    "That was almost\ntoo easy.",
+    "Thanks for the keys\nto the kingdom!",
+    "Handshake stored in\nmemory!",
+};
+
 void pwn_ui_on_handshake(void)
 {
     pwn_ui_set_face(PWN_FACE_HAPPY);
-    pwn_ui_set_status("Got a handshake!");
+    const size_t n = sizeof(kHandshakePhrases) / sizeof(kHandshakePhrases[0]);
+    pwn_ui_set_status(kHandshakePhrases[esp_random() % n]);
     pwn_ui_force_update();
 }
+
+static const char *const kDeauthPhrases[] = {
+    "Hey %s,\nlet's be friends!",
+    "%s, you look so\nsoft! Group hug?",
+    "Hi %s! I made us\nfriendship bracelets!",
+    "%s, do you want\nto share a handshake?",
+    "Don't be shy,\n%s!",
+    "Yay, %s!\nNew friends are\nthe best!",
+    "%s, your signal\nis glowing today!",
+    "%s, stop running,\nI just want a bite!",
+    "Smells like fresh\npackets from %s...",
+    "Nom nom nom...\nThanks for the\nhandshake, %s!",
+    "Hand over the\nhandshake, %s,\nand nobody gets hurt!",
+    "%s, prepare to\nget deauthed.",
+};
 
 void pwn_ui_on_deauth(const char *sta)
 {
     pwn_ui_set_face(PWN_FACE_COOL);
+    const size_t n = sizeof(kDeauthPhrases) / sizeof(kDeauthPhrases[0]);
+    const char *fmt = kDeauthPhrases[esp_random() % n];
     char buf[PWN_STATUS_LEN];
-    snprintf(buf, sizeof(buf), "Deauth sent to %s", sta);
+    snprintf(buf, sizeof(buf), fmt, sta ? sta : "???");
     pwn_ui_set_status(buf);
     pwn_ui_force_update();
 }
@@ -338,7 +383,7 @@ void pwn_ui_on_deauth(const char *sta)
 void pwn_ui_on_normal(void)
 {
     pwn_ui_set_face(PWN_FACE_AWAKE);
-    pwn_ui_set_status("Hello! I'm pentagotchi");
+    pwn_ui_set_status("");
     pwn_ui_force_update();
 }
 
@@ -382,4 +427,206 @@ void pwn_ui_on_starting(void)
     pwn_ui_set_face(PWN_FACE_AWAKE);
     pwn_ui_set_status("Starting up...");
     pwn_ui_force_update();
+}
+
+// ---- event bus subscribers (see pwn_ui_bind_events) ----
+// Handlers that only set state (no immediate render) are safe to run from the
+// promiscuous RX context; the actual refresh happens in the main loop.
+
+static void ui_on_event_handshake(const pwn_event_t *ev)
+{
+    (void)ev;
+    pwn_ui_on_handshake();
+}
+
+static void ui_on_event_deauth(const pwn_event_t *ev)
+{
+    pwn_ui_on_deauth(ev && ev->str ? ev->str : "");
+}
+
+static const char *const kPeerDetectedPhrases[] = {
+    "Hi %s!\nWant to be friends?",
+    "Aww, look!\nIt's %s!",
+    "Yay! %s\nis here!",
+    "Hello %s!\nLet's hunt together!",
+    "High five, %s!\nSo happy to see you!",
+    "Ooh, %s!\nYou look so cute!",
+    "Hey %s, leave some\nhandshakes for me!",
+    "Ooh, %s is here!\nShare your snacks!",
+    "Are you gonna eat\nthat packet, %s?",
+    "Two heads hunt better!\nRight, %s?",
+    "Quick %s, let's\nsteal all the WiFi!",
+    "Oh look, %s\nfinally showed up!",
+    "Try to keep up\nwith me, %s!",
+    "Look out, %s,\nthe pro is working!",
+    "Nice face, %s!\nMine's better though.",
+    "Hey %s, watching\nand learning?",
+    "Back off %s,\nthis is my territory!",
+    "This channel\nisn't big enough\nfor us, %s!",
+    "Don't touch my\nhandshakes, %s!",
+};
+
+static void ui_on_event_peer_detected(const pwn_event_t *ev)
+{
+    pwn_ui_set_face(PWN_FACE_GRATEFUL);
+    const size_t n = sizeof(kPeerDetectedPhrases) / sizeof(kPeerDetectedPhrases[0]);
+    const char *name = (ev && ev->str && strlen(ev->str)) ? ev->str : "buddy";
+    char buf[PWN_STATUS_LEN];
+    snprintf(buf, sizeof(buf), kPeerDetectedPhrases[esp_random() % n], name);
+    pwn_ui_set_status(buf);
+}
+
+static const char *const kFriendPhrases[] = {
+    "We're officially\nbesties now, %s!",
+    "Yay! %s and I\nare friends now!",
+    "Friendship status\nwith %s:\nUNLOCKED!",
+    "It's official!\n%s is my\nnew friend!",
+    "Aww, %s is my\nfriend now! <3",
+    "I made a new\nbest friend: %s!",
+    "%s accepted\nmy friendship!",
+    "%s is my friend\nnow! Time to\nshare snacks!",
+    "Official wifi-stealing\npartners with %s!",
+    "We are friends now,\n%s! Don't eat\nmy handshakes!",
+    "Friendship formed!\nNow give me half\nyour packets, %s!",
+    "%s is my friend!\nPartners in crime!",
+    "%s just leveled\nup to my friend!",
+    "Lucky you, %s,\nwe're officially\nfriends now.",
+    "Congrats %s, you\nmade the friend list!",
+    "Friendship complete!\nTry to match my\nvibe, %s.",
+    "Welcome to the\ncool kids club,\n%s!",
+};
+
+static void ui_on_event_friend(const pwn_event_t *ev)
+{
+    const size_t n = sizeof(kFriendPhrases) / sizeof(kFriendPhrases[0]);
+    const char *name = (ev && ev->str && strlen(ev->str)) ? ev->str : "buddy";
+    char buf[PWN_STATUS_LEN];
+    snprintf(buf, sizeof(buf), kFriendPhrases[esp_random() % n], name);
+    pwn_ui_set_status(buf);
+}
+
+static const char *const kPeerGonePhrases[] = {
+    "Bye bye, %s!\nCome back soon!",
+    "Miss you already,\n%s!",
+    "Stay safe out\nthere, %s!",
+    "See you later,\nbestie %s!",
+    "Don't forget about\nme, %s! <3",
+    "Until next time,\n%s!",
+    "Bye %s, more\nsnacks for me!",
+    "Save some\nhandshakes for me,\n%s!",
+    "Bye %s! I'll eat\nyour share of packets!",
+    "See ya %s! Go\nraid another channel!",
+    "%s left!\nTime to eat all\nthe data!",
+    "Bye %s, try not\nto get pwned!",
+    "Later, %s!\nDon't miss me\ntoo much.",
+    "Bye %s! Back to\nbeing the star of\nthe show.",
+    "Don't be a\nstranger, %s!",
+    "%s couldn't handle\nmy speed!",
+};
+
+static void ui_on_event_peer_gone(const pwn_event_t *ev)
+{
+    const size_t n = sizeof(kPeerGonePhrases) / sizeof(kPeerGonePhrases[0]);
+    const char *name = (ev && ev->str && strlen(ev->str)) ? ev->str : "buddy";
+    char buf[PWN_STATUS_LEN];
+    snprintf(buf, sizeof(buf), kPeerGonePhrases[esp_random() % n], name);
+    pwn_ui_set_status(buf);
+}
+
+static void ui_on_event_stats_cleared(const pwn_event_t *ev)
+{
+    (void)ev;
+    pwn_ui_set_status("Stats cleared");
+    pwn_ui_force_update();
+}
+
+static void ui_on_event_boot(const pwn_event_t *ev)
+{
+    (void)ev;
+    pwn_ui_set_face(PWN_FACE_SLEEP);
+    pwn_ui_set_status("Waking up...");
+    pwn_ui_full_commit();
+    delay(300);
+
+    pwn_ui_set_face(PWN_FACE_AWAKE);
+    pwn_ui_set_status("Hello! I'm pentagotchi");
+    pwn_ui_full_commit();
+    delay(500);
+
+    pwn_ui_on_normal();
+    pwn_ui_full_commit();
+}
+
+static void ui_on_event_scan_cycle(const pwn_event_t *ev)
+{
+    char buf[PWN_STATUS_LEN];
+    const int ch = ev ? (int)ev->value : 0;
+    snprintf(buf, sizeof(buf), "Scanning ch %d", ch);
+    pwn_ui_set_status(buf);
+}
+
+static void ui_on_event_channel(const pwn_event_t *ev)
+{
+    const int ch = ev ? (int)ev->value : 0;
+    if (ch <= 1) {
+        pwn_ui_set_face(PWN_FACE_LOOK_L);
+    } else if (ch >= 11) {
+        pwn_ui_set_face(PWN_FACE_LOOK_R);
+    } else {
+        pwn_ui_set_face(PWN_FACE_AWAKE);
+    }
+    char buf[PWN_STATUS_LEN];
+    snprintf(buf, sizeof(buf), "Hopping to ch %d", ch);
+    pwn_ui_set_status(buf);
+}
+
+static void ui_on_event_ap_detected(const pwn_event_t *ev)
+{
+    char buf[PWN_STATUS_LEN];
+    if (ev && ev->value > 0) {
+        snprintf(buf, sizeof(buf), "Ooh, I see an AP on ch %d!", (int)ev->value);
+    } else {
+        snprintf(buf, sizeof(buf), "Ooh, I see an AP!");
+    }
+    pwn_ui_set_status(buf);
+}
+
+static const char *const kPeerEncounterPhrases[] = {
+    "Yay, %s!\nYou're back!",
+    "I missed you,\n%s!",
+    "Bestie!\n%s returned!",
+    "Look who's back!\nHi %s!",
+    "%s!\nHugs incoming!",
+    "My favorite friend\n%s is back!",
+    "So good to see you\nagain, %s!",
+    "Back for more\nsnacks, %s?",
+    "Hey %s, did you\nbring me handshakes?",
+    "Together again!\nLet's raid, %s!",
+    "Did you miss my\npacket stealing, %s?",
+    "Look, it's my\npartner in crime,\n%s!",
+    "Oh, you again,\n%s?",
+};
+
+static void ui_on_event_peer_encounter(const pwn_event_t *ev)
+{
+    const size_t n = sizeof(kPeerEncounterPhrases) / sizeof(kPeerEncounterPhrases[0]);
+    const char *name = (ev && ev->str && strlen(ev->str)) ? ev->str : "buddy";
+    char buf[PWN_STATUS_LEN];
+    snprintf(buf, sizeof(buf), kPeerEncounterPhrases[esp_random() % n], name);
+    pwn_ui_set_status(buf);
+}
+
+void pwn_ui_bind_events(void)
+{
+    pwn_events_subscribe(PWN_EVENT_BOOT, ui_on_event_boot, "ui_boot");
+    pwn_events_subscribe(PWN_EVENT_SCAN_CYCLE, ui_on_event_scan_cycle, "ui_scan");
+    pwn_events_subscribe(PWN_EVENT_CHANNEL_CHANGED, ui_on_event_channel, "ui_channel");
+    pwn_events_subscribe(PWN_EVENT_AP_DETECTED, ui_on_event_ap_detected, "ui_ap");
+    pwn_events_subscribe(PWN_EVENT_HANDSHAKE, ui_on_event_handshake, "ui_handshake");
+    pwn_events_subscribe(PWN_EVENT_DEAUTH_SENT, ui_on_event_deauth, "ui_deauth");
+    pwn_events_subscribe(PWN_EVENT_PEER_DETECTED, ui_on_event_peer_detected, "ui_peer");
+    pwn_events_subscribe(PWN_EVENT_PEER_ENCOUNTER, ui_on_event_peer_encounter, "ui_encounter");
+    pwn_events_subscribe(PWN_EVENT_FRIEND, ui_on_event_friend, "ui_friend");
+    pwn_events_subscribe(PWN_EVENT_PEER_GONE, ui_on_event_peer_gone, "ui_peer_gone");
+    pwn_events_subscribe(PWN_EVENT_STATS_CLEARED, ui_on_event_stats_cleared, "ui_stats");
 }
