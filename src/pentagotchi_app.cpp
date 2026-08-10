@@ -2,6 +2,7 @@
 
 #include "eink_display.h"
 #include "pentagotchi_events.h"
+#include "pentagotchi_gps.h"
 #include "pentagotchi_internal.h"
 
 #include <esp_log.h>
@@ -78,6 +79,7 @@ void PentagotchiApp::begin() {
 
     pentagotchi_stats_load(&stats);
     pentagotchi_grid_init(config.name, stats.total_pwnd);
+    pentagotchi_grid_set_enabled(config.grid_enabled);
     pwn_ui_init();
     pwn_ui_bind_events();
     eink_set_full_refresh_interval(kFullRefreshIntervalS);
@@ -87,6 +89,10 @@ void PentagotchiApp::begin() {
 
     deauthEnabled = config.deauth_enabled;
 
+    if (config.gps_enabled) {
+        gps_init();
+    }
+
     initWifi();
     pwn_events_raise_simple(PWN_EVENT_BOOT);
     lastCycleTs = millis();
@@ -95,6 +101,8 @@ void PentagotchiApp::begin() {
 
 void PentagotchiApp::loop() {
     const uint32_t now = millis();
+
+    if (config.gps_enabled) { gps_update(); }
 
     handleSerialCommands();
 
@@ -185,6 +193,25 @@ void PentagotchiApp::handleSerialCommands() {
                 for (uint32_t i = 0; i < handlers; ++i) {
                     Serial.printf(">    %-16s -> %s\n", pwn_events_name(pwn_events_handler_id(i)),
                                   pwn_events_handler_tag(i));
+                }
+            } else if (strcmp(start, "gps") == 0) {
+                if (!config.gps_enabled) {
+                    Serial.println("> gps disabled");
+                } else {
+                    const gps_fix_t *fx = gps_fix();
+                    if (!fx->valid) {
+                        Serial.printf("> no fix (quality=%u satellites=%u)\n",
+                                      static_cast<unsigned>(fx->quality),
+                                      static_cast<unsigned>(fx->satellites));
+                    } else {
+                        char iso[24];
+                        snprintf(iso, sizeof(iso), "%04u-%02u-%02uT%02u:%02u:%02uZ",
+                                 fx->year, fx->month, fx->day, fx->hour, fx->minute, fx->second);
+                        Serial.printf("> lat=%.6f lon=%.6f alt=%.1fm spd=%.1fkm/h sat=%u %s\n",
+                                      fx->latitude, fx->longitude, static_cast<double>(fx->altitude),
+                                      static_cast<double>(fx->speed),
+                                      static_cast<unsigned>(fx->satellites), iso);
+                    }
                 }
             } else {
                 Serial.printf("> unknown command: %s\n", start);

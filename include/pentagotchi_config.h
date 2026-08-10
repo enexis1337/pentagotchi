@@ -18,8 +18,8 @@ typedef struct {
     char lang[8];
     uint8_t whitelist[PWN_CONFIG_MAX_WHITELIST][6]; // MACs not attacked
     uint8_t whitelist_count;
-    bool plugins_grid_enabled;
-    bool plugins_gps_enabled;
+    bool grid_enabled;   // pwngrid mesh on/off (default on)
+    bool gps_enabled;    // GPS module on/off (default off)
 
     // --- ui ---
     struct {
@@ -55,3 +55,8 @@ bool pentagotchi_config_save(const pentagotchi_config_t *cfg, bool sd_ready);
 #ifdef __cplusplus
 }
 #endif
+
+// Firmware version tag, defined in main.cpp. Compared against "main.version"
+// in /config.json; a mismatch makes pentagotchi_config_load() re-save the
+// config with the new version while keeping the user's existing settings.
+extern const char kFirmwareVersion[];

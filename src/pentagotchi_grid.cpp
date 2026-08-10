@@ -34,6 +34,7 @@ static String s_identity;
 static String s_name;
 static String s_sessionId;
 static uint32_t s_pwndTotal = 0;
+static bool s_enabled = true;
 
 // Values updated by pentagotchi_grid_update()
 static uint32_t s_uptime = 0;
@@ -87,7 +88,12 @@ void pentagotchi_grid_init(const char *name, uint32_t pwnd_total) {
     s_sessionId = sid;
 }
 
+void pentagotchi_grid_set_enabled(bool enabled) {
+    s_enabled = enabled;
+}
+
 void pentagotchi_grid_update(uint32_t uptime_sec, uint32_t pwnd_session, uint32_t pwnd_total, const char *face) {
+    if (!s_enabled) { return; }
     s_uptime = uptime_sec;
     s_pwndSession = pwnd_session;
     s_pwndTotal = pwnd_total;
@@ -118,6 +124,7 @@ static JsonDocument buildAdvertisement() {
 }
 
 esp_err_t pentagotchi_grid_send_beacon(void) {
+    if (!s_enabled) { return ESP_ERR_INVALID_STATE; }
     JsonDocument doc = buildAdvertisement();
     String jsonStr;
     serializeJson(doc, jsonStr);
@@ -227,6 +234,9 @@ bool pentagotchi_grid_handle_mgmt(const wifi_promiscuous_pkt_t *packet) {
     const uint8_t subtype = (frameCtrl & 0xF0) >> 4;
     if (subtype != 0x08) { return false; } // only pal/pwngrid beacon advertisements
 
+    // Even when disabled, consume grid beacons so they are not counted as APs.
+    if (!s_enabled) { return true; }
+
     // Pal beacons: printable JSON from offset 38 (AC headers are skipped as non-ASCII)
     String payload;
     for (int i = 38; i < len; ++i) {
@@ -258,6 +268,7 @@ bool pentagotchi_grid_handle_mgmt(const wifi_promiscuous_pkt_t *packet) {
 }
 
 void pentagotchi_grid_prune(void) {
+    if (!s_enabled) { return; }
     const unsigned long now = millis();
 
     if (gPeersMutex) { xSemaphoreTake(gPeersMutex, portMAX_DELAY); }
@@ -283,6 +294,7 @@ void pentagotchi_grid_prune(void) {
 
 bool pentagotchi_grid_closest_peer(String &face, String &name, uint32_t &pwnd_session,
                                    uint32_t &pwnd_total, int &rssi) {
+    if (!s_enabled) { return false; }
     const PwngridPeer *closest = nullptr;
 
     if (gPeersMutex) { xSemaphoreTake(gPeersMutex, portMAX_DELAY); }

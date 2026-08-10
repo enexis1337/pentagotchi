@@ -312,12 +312,12 @@ void pwn_ui_init(void)
     memset(&s_prev, 0, sizeof(s_prev));
 
     strcpy(s_state.channel, "00");
-    strcpy(s_state.aps, "0 (00)");
+    strcpy(s_state.aps, "0 (0)");
     strcpy(s_state.uptime, "00:00:00");
     strcpy(s_state.face, PWN_FACE_SLEEP);
     strcpy(s_state.name, "pentagotchi");
     strcpy(s_state.status, "starting...");
-    strcpy(s_state.shakes, "0 (00)");
+    strcpy(s_state.shakes, "0 (0)");
     strcpy(s_state.mode, "AUTO");
     s_state.friend_rssi = -1000;
 

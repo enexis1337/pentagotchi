@@ -48,8 +48,8 @@ void pentagotchi_config_set_defaults(pentagotchi_config_t *cfg) {
     strncpy(cfg->lang, "en", sizeof(cfg->lang) - 1);
     cfg->lang[sizeof(cfg->lang) - 1] = '\0';
     cfg->whitelist_count = 0;
-    cfg->plugins_grid_enabled = false;
-    cfg->plugins_gps_enabled = false;
+    cfg->grid_enabled = true;
+    cfg->gps_enabled = false;
 
     cfg->display.enabled = true;
     strncpy(cfg->display.rotation, "right", sizeof(cfg->display.rotation) - 1);
@@ -115,16 +115,16 @@ bool pentagotchi_config_load(pentagotchi_config_t *cfg, bool sd_ready) {
         return false;
     }
 
+    bool versionMismatch = false;
     if (doc["main"].is<JsonObject>()) {
         JsonObject main_ = doc["main"];
+        const char *storedVer = main_["version"] | "";
+        versionMismatch = strcmp(storedVer, kFirmwareVersion) != 0;
         copy_string(main_["name"] | cfg->name, cfg->name, sizeof(cfg->name));
         copy_string(main_["lang"] | cfg->lang, cfg->lang, sizeof(cfg->lang));
         parse_whitelist(cfg, main_);
-        if (main_["plugins"].is<JsonObject>()) {
-            JsonObject plugins = main_["plugins"];
-            cfg->plugins_grid_enabled = plugins["grid"]["enabled"] | false;
-            cfg->plugins_gps_enabled = plugins["gps"]["enabled"] | false;
-        }
+        cfg->grid_enabled = main_["grid"]["enabled"] | cfg->grid_enabled;
+        cfg->gps_enabled = main_["gps"]["enabled"] | cfg->gps_enabled;
     }
 
     if (doc["ui"].is<JsonObject>()) {
@@ -162,6 +162,16 @@ bool pentagotchi_config_load(pentagotchi_config_t *cfg, bool sd_ready) {
 
     ESP_LOGI(kLogTag, "Loaded config from %s (name=%s lang=%s deauth=%d whitelist=%u)",
              kConfigPath, cfg->name, cfg->lang, cfg->deauth_enabled, cfg->whitelist_count);
+
+    if (versionMismatch) {
+        ESP_LOGW(kLogTag, "Config version != firmware (%s), re-saving %s with current settings",
+                 kFirmwareVersion, kConfigPath);
+        SERIAL_PRINTF("[pentagotchi] config version mismatch, migrating %s to %s\n",
+                      kConfigPath, kFirmwareVersion);
+        if (!pentagotchi_config_save(cfg, true)) {
+            ESP_LOGW(kLogTag, "Config migration save failed");
+        }
+    }
     return true;
 }
 
@@ -183,6 +193,7 @@ bool pentagotchi_config_save(const pentagotchi_config_t *cfg, bool sd_ready) {
     JsonObject main_ = doc["main"].to<JsonObject>();
     main_["name"] = cfg->name;
     main_["lang"] = cfg->lang;
+    main_["version"] = kFirmwareVersion;
     JsonArray whitelist = main_["whitelist"].to<JsonArray>();
     for (uint8_t i = 0; i < cfg->whitelist_count; ++i) {
         char mac[18];
@@ -191,9 +202,8 @@ bool pentagotchi_config_save(const pentagotchi_config_t *cfg, bool sd_ready) {
                  cfg->whitelist[i][3], cfg->whitelist[i][4], cfg->whitelist[i][5]);
         whitelist.add(mac);
     }
-    JsonObject plugins = main_["plugins"].to<JsonObject>();
-    plugins["grid"]["enabled"] = cfg->plugins_grid_enabled;
-    plugins["gps"]["enabled"] = cfg->plugins_gps_enabled;
+    main_["grid"]["enabled"] = cfg->grid_enabled;
+    main_["gps"]["enabled"] = cfg->gps_enabled;
 
     JsonObject ui = doc["ui"].to<JsonObject>();
     JsonObject display = ui["display"].to<JsonObject>();

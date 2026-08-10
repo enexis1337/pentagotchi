@@ -1,7 +1,9 @@
 #include "pentagotchi_app.h"
 #include "eink_display.h"
+#include "pentagotchi_gps.h"
 #include "pentagotchi_internal.h"
 
+#include <ArduinoJson.h>
 #include <FS.h>
 #include <SD.h>
 #include <SPI.h>
@@ -27,6 +29,40 @@ while (start <= path.length()) {
             }
         }
         start = slash + 1;
+    }
+}
+
+// Write a <name>.gps.json snapshot of the current GPS fix next to a .pcap.
+static void writeGpsSidecar(const String &gpsPath) {
+    const gps_fix_t *fx = gps_fix();
+    if (!fx) { return; }
+
+    fs::File file = SD.open(gpsPath, FILE_WRITE);
+    if (!file) {
+        ESP_LOGW(kLogTag, "Failed to open %s", gpsPath.c_str());
+        SERIAL_PRINTF("[pentagotchi] Failed to open %s\n", gpsPath.c_str());
+        return;
+    }
+
+    JsonDocument doc;
+    doc["Latitude"] = fx->latitude;
+    doc["Longitude"] = fx->longitude;
+    doc["Altitude"] = fx->altitude;
+    doc["Speed"] = fx->speed;
+
+    char iso[24];
+    snprintf(iso, sizeof(iso), "%04u-%02u-%02uT%02u:%02u:%02uZ",
+             fx->year, fx->month, fx->day, fx->hour, fx->minute, fx->second);
+    doc["Updated"] = iso;
+
+    bool ok = serializeJsonPretty(doc, file) > 0;
+    file.close();
+    if (ok) {
+        ESP_LOGI(kLogTag, "GPS snapshot saved to %s", gpsPath.c_str());
+        SERIAL_PRINTF("[pentagotchi] GPS snapshot saved to %s\n", gpsPath.c_str());
+    } else {
+        ESP_LOGW(kLogTag, "Failed to write %s", gpsPath.c_str());
+        SERIAL_PRINTF("[pentagotchi] Failed to write %s\n", gpsPath.c_str());
     }
 }
 
@@ -74,13 +110,13 @@ void PentagotchiApp::saveHandshake(const wifi_promiscuous_pkt_t *packet) {
     const uint8_t *apAddr = (memcmp(addr1, bssid, 6) == 0) ? addr1 : addr2;
 
     String macStr = macToString(apAddr);
+    String macNum = macStr;
+    macNum.replace(":", "");
     ensure_dir_recursive(kHandshakeDir);
 
     String path = kHandshakeDir;
     if (!path.endsWith("/")) { path += "/"; }
-    path += "HS_" + macStr;
-    path.replace(":", "");
-    path += ".pcap";
+    path += "HS_" + macNum + ".pcap";
 
     fs::File file = SD.open(path, SD.exists(path) ? FILE_APPEND : FILE_WRITE);
     if (!file) {
@@ -105,4 +141,20 @@ void PentagotchiApp::saveHandshake(const wifi_promiscuous_pkt_t *packet) {
     file.close();
     ESP_LOGI(kLogTag, "Handshake saved to %s (%u bytes)", path.c_str(), packet->rx_ctrl.sig_len);
     SERIAL_PRINTF("[pentagotchi] Handshake saved to %s (%u bytes)\n", path.c_str(), packet->rx_ctrl.sig_len);
+
+    if (config.gps_enabled) {
+        if (gps_has_fix()) {
+            String gpsPath = kHandshakeDir;
+            if (!gpsPath.endsWith("/")) { gpsPath += "/"; }
+            gpsPath += "HS_" + macNum + ".gps.json";
+            writeGpsSidecar(gpsPath);
+        } else {
+            static uint32_t lastNoFixWarn = 0;
+            uint32_t now = millis();
+            if (now - lastNoFixWarn > 10000) {
+                ESP_LOGW(kLogTag, "GPS enabled but no fix yet; skipping .gps.json for %s", path.c_str());
+                lastNoFixWarn = now;
+            }
+        }
+    }
 }

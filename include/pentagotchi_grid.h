@@ -20,6 +20,11 @@ extern "C" {
 // Load (or generate and persist) the unit identity, cache unit name.
 void pentagotchi_grid_init(const char *name, uint32_t pwnd_total);
 
+// Enable/disable the mesh (guard for all grid operations). Disabled = no
+// beacons sent, no peers tracked, incoming grid frames ignored but still
+// excluded from the AP counter.
+void pentagotchi_grid_set_enabled(bool enabled);
+
 // Update the values embedded in our own advertisement.
 void pentagotchi_grid_update(uint32_t uptime_sec, uint32_t pwnd_session, uint32_t pwnd_total, const char *face);
 
