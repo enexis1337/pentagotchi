@@ -13,6 +13,9 @@ std::vector<PwngridPeer> gPeers;
 uint8_t gTotalFriends = 0;
 String gLastFriendName;
 String gLastPwndName;
+String gLastHandshakeFile;
+uint8_t gLastHandshakeMac[6] = {0};
+bool gLastHandshakeMacValid = false;
 int gClosestRssi = -1000;
 int gHandshakeCount = 0;
 

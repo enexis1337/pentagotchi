@@ -92,7 +92,7 @@ void PentagotchiApp::ensureStorageReady() {
     SERIAL_PRINTLN("[pentagotchi] Handshake storage ready");
 }
 
-void PentagotchiApp::saveHandshake(const wifi_promiscuous_pkt_t *packet) {
+void PentagotchiApp::saveHandshake(const HandshakeCapture &capture) {
     static uint32_t lastWarn = 0;
     if (!storageReady) {
         uint32_t now = millis();
@@ -104,12 +104,7 @@ void PentagotchiApp::saveHandshake(const wifi_promiscuous_pkt_t *packet) {
         return;
     }
 
-    const uint8_t *addr1 = packet->payload + 4;
-    const uint8_t *addr2 = packet->payload + 10;
-    const uint8_t *bssid = packet->payload + 16;
-    const uint8_t *apAddr = (memcmp(addr1, bssid, 6) == 0) ? addr1 : addr2;
-
-    String macStr = macToString(apAddr);
+    String macStr = macToString(capture.bssid);
     String macNum = macStr;
     macNum.replace(":", "");
     ensure_dir_recursive(kHandshakeDir);
@@ -130,17 +125,37 @@ void PentagotchiApp::saveHandshake(const wifi_promiscuous_pkt_t *packet) {
         file.write(reinterpret_cast<const uint8_t *>(&hdr), sizeof(hdr));
     }
 
-    PcapRecordHeader rec{};
-    rec.tsSec = packet->rx_ctrl.timestamp / 1000000;
-    rec.tsUsec = packet->rx_ctrl.timestamp % 1000000;
-    rec.inclLen = packet->rx_ctrl.sig_len;
-    rec.origLen = packet->rx_ctrl.sig_len;
+    // Write the cached beacon first (per-AP SSID context), then M1..M4 in
+    // capture order. All frames are FCS-free.
+    auto writeFrame = [&](const uint8_t *data, uint16_t len, uint32_t tsSec, uint32_t tsUsec) {
+        if (len == 0)
+            return;
+        PcapRecordHeader rec{};
+        rec.tsSec = tsSec;
+        rec.tsUsec = tsUsec;
+        rec.inclLen = len;
+        rec.origLen = len;
+        file.write(reinterpret_cast<const uint8_t *>(&rec), sizeof(rec));
+        file.write(data, len);
+    };
 
-    file.write(reinterpret_cast<const uint8_t *>(&rec), sizeof(rec));
-    file.write(packet->payload, packet->rx_ctrl.sig_len);
+    if (capture.beacon.len > 0) {
+        writeFrame(capture.beacon.data, capture.beacon.len,
+                   capture.beacon.tsSec, capture.beacon.tsUsec);
+    }
+    bool complete = capture.m1.len > 0 && capture.m2.len > 0 &&
+                    capture.m3.len > 0 && capture.m4.len > 0;
+    writeFrame(capture.m1.data, capture.m1.len, capture.m1.tsSec, capture.m1.tsUsec);
+    writeFrame(capture.m2.data, capture.m2.len, capture.m2.tsSec, capture.m2.tsUsec);
+    writeFrame(capture.m3.data, capture.m3.len, capture.m3.tsSec, capture.m3.tsUsec);
+    writeFrame(capture.m4.data, capture.m4.len, capture.m4.tsSec, capture.m4.tsUsec);
     file.close();
-    ESP_LOGI(kLogTag, "Handshake saved to %s (%u bytes)", path.c_str(), packet->rx_ctrl.sig_len);
-    SERIAL_PRINTF("[pentagotchi] Handshake saved to %s (%u bytes)\n", path.c_str(), packet->rx_ctrl.sig_len);
+
+    gLastHandshakeFile = path;
+    ESP_LOGI(kLogTag, "Handshake saved to %s (%s, %d frames)", path.c_str(),
+             complete ? "complete" : "partial", (capture.beacon.len ? 1 : 0) + 4);
+    SERIAL_PRINTF("[pentagotchi] Handshake saved to %s (%s)\n",
+                  path.c_str(), complete ? "complete M1-M4" : "partial");
 
     if (config_.gps_enabled) {
         if (gps_has_fix()) {

@@ -895,12 +895,14 @@ void dispatch_event(JSContext *ctx, const PendingEvent &ev)
         hook = "on_handshake";
         JSValue ap = JS_NewObject(ctx);
         add_arg(ap);
-        build_ap_object(ctx, nullptr, 0, readWifiChannel(), nullptr, ap);
+        build_ap_object(ctx, ev.mac, ev.rssi, readWifiChannel(), ev.str, ap);
         JSValue client = JS_NewObject(ctx);
         add_arg(client);
         build_client_object(ctx, nullptr, 0, 0, client);
         char filename[64];
-        if (!gLastPwndName.isEmpty()) {
+        if (!gLastHandshakeFile.isEmpty()) {
+            snprintf(filename, sizeof(filename), "%s", gLastHandshakeFile.c_str());
+        } else if (!gLastPwndName.isEmpty()) {
             String macnum = gLastPwndName;
             macnum.replace(":", "");
             snprintf(filename, sizeof(filename), "/Handshakes/HS_%s.pcap", macnum.c_str());

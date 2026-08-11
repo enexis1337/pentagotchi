@@ -36,6 +36,165 @@ esp_err_t sendRawFrame(wifi_interface_t ifx, const void *frame, int len, const c
     return err;
 }
 
+/* ------------------------------------------------------------------ */
+/* 4-way handshake capture state (borrowed from the Bruce firmware's   */
+/* sniffer.cpp: classifyEapolMessage + per-AP M1..M4 buffering)        */
+/* ------------------------------------------------------------------ */
+
+// Classify a 4-way handshake EAPOL frame by its Key Information field.
+// Returns 1..4 (message number) or -1 when unrecognized.
+int classifyEapolMessage(const uint8_t *payload, uint32_t sig_len) {
+    // QoS frames add 2 bytes to the MAC header
+    const int qosOffset = ((payload[0] & 0x0F) == 0x08) ? 2 : 0;
+    // Offset to Key Information: 24 MAC hdr (+QoS) + 8 LLC/SNAP + 4 EAPOL hdr + 1 descr type
+    const int keyInfoOffset = 24 + qosOffset + 8 + 4 + 1;
+    if (sig_len < static_cast<uint32_t>(keyInfoOffset + 2))
+        return -1;
+
+    const uint16_t keyInfo = (payload[keyInfoOffset] << 8) | payload[keyInfoOffset + 1];
+    const bool install = keyInfo & (1 << 6);
+    const bool ack = keyInfo & (1 << 7);
+    const bool mic = keyInfo & (1 << 8);
+    const bool secure = keyInfo & (1 << 9);
+
+    if (ack && !mic && !install) return 1;            // Message 1
+    if (!ack && mic && !install && !secure) return 2; // Message 2
+    if (ack && mic && install) return 3;              // Message 3
+    if (!ack && mic && !install && secure) return 4;  // Message 4
+    return -1;
+}
+
+struct EapolTracker {
+    bool used = false;
+    uint64_t key = 0;      // AP MAC
+    uint8_t seen = 0;      // bit0: M1 buffered, bit1: M2, bit2: M3
+    CapFrame m1, m2, m3;
+};
+
+struct BeaconCacheEntry {
+    bool used = false;
+    uint64_t key = 0;      // AP MAC
+    char ssid[33]{};       // SSID extracted from the cached beacon ("" if none)
+    BeaconFrame frame;     // FCS already stripped
+};
+
+constexpr int kTrackerSlots = 16;
+constexpr int kBeaconSlots = 16;
+static EapolTracker *s_trackers = nullptr;
+static BeaconCacheEntry *s_beacons = nullptr;
+
+// Once-only PSRAM allocation of the capture state (falls back to internal
+// RAM). Called from initWifi().
+void initHandshakeCapture(void) {
+    if (s_trackers && s_beacons)
+        return;
+    s_trackers = static_cast<EapolTracker *>(
+        heap_caps_calloc(kTrackerSlots, sizeof(EapolTracker), MALLOC_CAP_SPIRAM));
+    if (!s_trackers)
+        s_trackers = static_cast<EapolTracker *>(
+            heap_caps_calloc(kTrackerSlots, sizeof(EapolTracker), MALLOC_CAP_8BIT));
+    s_beacons = static_cast<BeaconCacheEntry *>(
+        heap_caps_calloc(kBeaconSlots, sizeof(BeaconCacheEntry), MALLOC_CAP_SPIRAM));
+    if (!s_beacons)
+        s_beacons = static_cast<BeaconCacheEntry *>(
+            heap_caps_calloc(kBeaconSlots, sizeof(BeaconCacheEntry), MALLOC_CAP_8BIT));
+}
+
+static EapolTracker *trackerGet(uint64_t key) {
+    if (!s_trackers)
+        return nullptr;
+    for (int i = 0; i < kTrackerSlots; ++i) {
+        if (s_trackers[i].used && s_trackers[i].key == key)
+            return &s_trackers[i];
+    }
+    return nullptr;
+}
+
+static EapolTracker *trackerAlloc(uint64_t key) {
+    EapolTracker *t = trackerGet(key);
+    if (t)
+        return t;
+    if (!s_trackers)
+        return nullptr;
+    for (int i = 0; i < kTrackerSlots; ++i) {
+        if (!s_trackers[i].used) {
+            EapolTracker *n = &s_trackers[i];
+            n->used = true;
+            n->key = key;
+            n->seen = 0;
+            n->m1.len = n->m2.len = n->m3.len = 0;
+            return n;
+        }
+    }
+    // all slots busy: evict the oldest (wraps around)
+    static int s_evict = 0;
+    EapolTracker *n = &s_trackers[s_evict];
+    s_evict = (s_evict + 1) % kTrackerSlots;
+    n->used = true;
+    n->key = key;
+    n->seen = 0;
+    n->m1.len = n->m2.len = n->m3.len = 0;
+    return n;
+}
+
+// Extract the SSID from a beacon frame (SSID is tag 0 of the info elements).
+static void extractBeaconSsid(const uint8_t *frame, size_t frameLen, char *out, size_t cap)
+{
+    out[0] = '\0';
+    if (frameLen < 36 || cap < 1)
+        return;
+    size_t pos = 36;
+    while (pos + 2 <= frameLen) {
+        const uint8_t tag = frame[pos];
+        const uint8_t tagLen = frame[pos + 1];
+        if (pos + 2 + tagLen > frameLen)
+            return;
+        if (tag == 0) {
+            const size_t sl = std::min<size_t>(tagLen, cap - 1);
+            memcpy(out, frame + pos + 2, sl);
+            out[sl] = '\0';
+            return;
+        }
+        pos += 2 + tagLen;
+    }
+}
+
+static BeaconCacheEntry *beaconGet(uint64_t key) {
+    if (!s_beacons)
+        return nullptr;
+    for (int i = 0; i < kBeaconSlots; ++i) {
+        if (s_beacons[i].used && s_beacons[i].key == key)
+            return &s_beacons[i];
+    }
+    return nullptr;
+}
+
+static BeaconCacheEntry *beaconCache(uint64_t key, const uint8_t *frame, uint16_t len,
+                                     uint32_t tsSec, uint32_t tsUsec) {
+    if (!s_beacons)
+        return nullptr;
+    BeaconCacheEntry *e = beaconGet(key);
+    if (!e) {
+        for (int i = 0; i < kBeaconSlots; ++i) {
+            if (!s_beacons[i].used) {
+                e = &s_beacons[i];
+                break;
+            }
+        }
+        if (!e) { // all busy: overwrite the first slot
+            e = &s_beacons[0];
+        }
+    }
+    e->used = true;
+    e->key = key;
+    e->frame.len = len;
+    e->frame.tsSec = tsSec;
+    e->frame.tsUsec = tsUsec;
+    memcpy(e->frame.data, frame, len);
+    extractBeaconSsid(frame, len, e->ssid, sizeof(e->ssid));
+    return e;
+}
+
 } // namespace
 
 void PentagotchiApp::initWifi() {
@@ -61,6 +220,8 @@ void PentagotchiApp::initWifi() {
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(&PentagotchiApp::wifiPromiscuousCallback));
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
     ESP_ERROR_CHECK(esp_wifi_set_channel(static_cast<uint8_t>(1 + random(0, 3) * 5), WIFI_SECOND_CHAN_NONE));
+
+    initHandshakeCapture();
 }
 
 void PentagotchiApp::rotateChannel() {
@@ -241,27 +402,10 @@ void PentagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_typ
         const uint8_t *dest = frame + 4;
         const uint8_t *src = frame + 10;
         const uint8_t *bssid = frame + 16;
+        const uint8_t *apAddr = (memcmp(dest, bssid, 6) == 0) ? dest : src;
         uint64_t bssidKey = 0;
-        memcpy(&bssidKey, bssid, 6);
-        if (gHandshakeBssids.find(bssidKey) == gHandshakeBssids.end()) {
-            gHandshakeBssids.insert(bssidKey);
-            ++gHandshakeCount;
-            ++gInstance->stats_.total_pwnd;
-            ++gInstance->statsChanges;
-            gInstance->handshakePending = true;
+        memcpy(&bssidKey, apAddr, 6);
 
-            // Remember the name of the AP this handshake belongs to
-            char pwndNet[33] = {0};
-            portENTER_CRITICAL(&gRadioMux);
-            for (const auto &be : gRegisteredBeacons) {
-                if (memcmp(be.mac, bssid, 6) == 0) {
-                    memcpy(pwndNet, be.ssid, sizeof(pwndNet));
-                    break;
-                }
-            }
-            portEXIT_CRITICAL(&gRadioMux);
-            gLastPwndName = pwndNet;
-        }
         char destMac[18] = {0};
         char srcMac[18] = {0};
         char bssidMac[18] = {0};
@@ -270,28 +414,145 @@ void PentagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_typ
         snprintf(bssidMac, sizeof(bssidMac), "%02X:%02X:%02X:%02X:%02X:%02X", bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
         ESP_LOGI(
             kLogTag,
-            "EAPOL frame #%d len=%u rssi=%d channel=%u src=%s dst=%s bssid=%s",
-            gHandshakeCount,
+            "EAPOL frame len=%u rssi=%d channel=%u src=%s dst=%s bssid=%s",
             packet->rx_ctrl.sig_len,
             packet->rx_ctrl.rssi,
             packet->rx_ctrl.channel,
             srcMac,
             destMac,
             bssidMac);
+
+        // All frames handed by the driver carry a trailing FCS; drop it before
+        // buffering so the saved pcap contains a clean 802.11 frame.
+        uint32_t frameLen = packet->rx_ctrl.sig_len;
+        if (frameLen >= 4)
+            frameLen -= 4;
+        if (frameLen > sizeof(CapFrame::data))
+            frameLen = sizeof(CapFrame::data);
+
+        const int msg = classifyEapolMessage(frame, packet->rx_ctrl.sig_len);
+        const uint32_t tsSec = packet->rx_ctrl.timestamp / 1000000;
+        const uint32_t tsUsec = packet->rx_ctrl.timestamp % 1000000;
+
+        /* M1/M2/M3: buffer, do not write to disk yet */
+        if (msg >= 1 && msg <= 3) {
+            EapolTracker *t = trackerAlloc(bssidKey);
+            if (t) {
+                const uint8_t bit = static_cast<uint8_t>(1 << (msg - 1));
+                if (!(t->seen & bit)) {
+                    CapFrame *fr = (msg == 1) ? &t->m1 : (msg == 2) ? &t->m2 : &t->m3;
+                    fr->len = static_cast<uint16_t>(frameLen);
+                    fr->tsSec = tsSec;
+                    fr->tsUsec = tsUsec;
+                    memcpy(fr->data, frame, frameLen);
+                    t->seen |= bit;
+                    SERIAL_PRINTF("[pentagotchi] handshake M%u buffered (bssid=%s)\n",
+                                  static_cast<unsigned>(msg), bssidMac);
+                }
+            }
+            return; // handled; skip beacon branch below
+        }
+
+        /* M4: the exchange is complete - flush M1..M4 (+ beacon) to pcap */
+        if (msg == 4) {
+            EapolTracker *t = trackerGet(bssidKey);
+            if (t && (t->seen & 0x7) == 0x7) {
+                bool isFirst = (gHandshakeBssids.find(bssidKey) == gHandshakeBssids.end());
+
+                // static: keeps ~1.5 KB off the WiFi task stack; this callback
+                // uses it synchronously (fill -> saveHandshake -> done).
+                static HandshakeCapture cap;
+                memset(&cap, 0, sizeof(cap));
+                memcpy(cap.bssid, apAddr, sizeof(cap.bssid));
+                cap.m1 = t->m1;
+                cap.m2 = t->m2;
+                cap.m3 = t->m3;
+                cap.m4.len = static_cast<uint16_t>(frameLen);
+                cap.m4.tsSec = tsSec;
+                cap.m4.tsUsec = tsUsec;
+                memcpy(cap.m4.data, frame, frameLen);
+
+                BeaconCacheEntry *be = beaconGet(bssidKey);
+                if (be) {
+                    cap.beacon = be->frame;
+                }
+
+                // Always reveal the network we just captured, guaranteed:
+                // 1) SSID straight from the cached raw beacon (works even when
+                //    the pwngrid handler consumed the beacon and it never made
+                //    it into gRegisteredBeacons), 2) SSID from the registered
+                //    beacon list, 3) "Hidden" for cloaked / unknown networks.
+                char pwndName[33] = {0};
+                if (be && be->ssid[0]) {
+                    memcpy(pwndName, be->ssid, sizeof(pwndName) - 1);
+                } else {
+                    portENTER_CRITICAL(&gRadioMux);
+                    for (const auto &be2 : gRegisteredBeacons) {
+                        if (memcmp(be2.mac, cap.bssid, 6) == 0) {
+                            memcpy(pwndName, be2.ssid, sizeof(pwndName));
+                            break;
+                        }
+                    }
+                    portEXIT_CRITICAL(&gRadioMux);
+                }
+                if (!pwndName[0]) {
+                    snprintf(pwndName, sizeof(pwndName), "Hidden");
+                }
+                memcpy(cap.ssid, pwndName, sizeof(cap.ssid));
+                gLastPwndName = pwndName;
+                portENTER_CRITICAL(&gRadioMux);
+                memcpy(gLastHandshakeMac, cap.bssid, sizeof(gLastHandshakeMac));
+                gLastHandshakeMacValid = true;
+                portEXIT_CRITICAL(&gRadioMux);
+
+                if (isFirst) {
+                    gHandshakeBssids.insert(bssidKey);
+                    ++gHandshakeCount;
+                    ++gInstance->stats_.total_pwnd;
+                    ++gInstance->statsChanges;
+                    gInstance->handshakePending = true;
+                }
+
+                SERIAL_PRINTF("[pentagotchi] COMPLETE handshake for %s\n", bssidMac);
+                gInstance->saveHandshake(cap);
+
+                // Clear the tracker so a fresh exchange can be captured and
+                // appended to the same pcap later.
+                t->used = false;
+                t->seen = 0;
+                t->key = 0;
+            }
+            return; // handled; skip beacon branch below
+        }
+
         SERIAL_PRINTF(
-            "[pentagotchi] EAPOL #%d len=%u rssi=%d ch=%u src=%s dst=%s bssid=%s\n",
-            gHandshakeCount,
+            "[pentagotchi] EAPOL (unclassified, msg=%d) len=%u rssi=%d ch=%u src=%s dst=%s bssid=%s\n",
+            msg,
             packet->rx_ctrl.sig_len,
             packet->rx_ctrl.rssi,
             packet->rx_ctrl.channel,
             srcMac,
             destMac,
             bssidMac);
-        gInstance->saveHandshake(packet);
+        return; // handled; skip beacon branch below
     }
 
     if (frameType == 0x00 && frameSubtype == 0x08) {
         const uint8_t *sender = frame + 10;
+
+        // Cache a raw copy of the beacon (FCS stripped) per AP so the
+        // handshake pcap can carry the SSID in its first record.
+        {
+            const size_t frameLen = static_cast<size_t>(packet->rx_ctrl.sig_len) - 4; // drop FCS
+            if (frameLen >= 24 && frameLen <= sizeof(BeaconFrame::data)) {
+                uint64_t beaconKey = 0;
+                memcpy(&beaconKey, sender, 6);
+                beaconCache(beaconKey, frame, static_cast<uint16_t>(frameLen),
+                            packet->rx_ctrl.timestamp / 1000000,
+                            packet->rx_ctrl.timestamp % 1000000);
+            }
+        }
+
         if (!pentagotchi_grid_handle_mgmt(packet)) {
             BeaconEntry entry;
             memcpy(entry.mac, sender, sizeof(entry.mac));

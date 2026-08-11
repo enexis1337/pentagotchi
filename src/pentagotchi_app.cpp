@@ -119,6 +119,8 @@ void PentagotchiApp::loop() {
 
         pwn_event_t ev = {};
         ev.value = gHandshakeCount;
+        ev.mac = gLastHandshakeMacValid ? gLastHandshakeMac : nullptr;
+        ev.str = gLastPwndName.c_str();
         pwn_events_raise(PWN_EVENT_HANDSHAKE, &ev);
     }
 

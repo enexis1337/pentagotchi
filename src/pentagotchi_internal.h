@@ -104,6 +104,9 @@ extern std::vector<PwngridPeer> gPeers;
 extern uint8_t gTotalFriends;
 extern String gLastFriendName;
 extern String gLastPwndName;
+extern String gLastHandshakeFile;
+extern uint8_t gLastHandshakeMac[6];
+extern bool gLastHandshakeMacValid;
 extern int gClosestRssi;
 extern int gHandshakeCount;
 

@@ -12,6 +12,35 @@
 
 class EInkDisplay;
 
+// A single captured 802.11 frame with FCS already stripped.
+struct CapFrame {
+    uint8_t data[256]{};
+    uint16_t len{0};
+    uint32_t tsSec{0};
+    uint32_t tsUsec{0};
+};
+
+// One cached raw beacon (SSID context record for a handshake pcap).
+struct BeaconFrame {
+    uint8_t data[512]{};
+    uint16_t len{0};
+    uint32_t tsSec{0};
+    uint32_t tsUsec{0};
+};
+
+// A complete 4-way handshake (M1..M4) plus the beacon that identifies the AP.
+// Captured the way the Bruce firmware does it: M1/M2/M3 are buffered and the
+// whole exchange is only written to disk once M4 arrives.
+struct HandshakeCapture {
+    uint8_t bssid[6]{};
+    char ssid[33]{};
+    CapFrame m1;
+    CapFrame m2;
+    CapFrame m3;
+    CapFrame m4;
+    BeaconFrame beacon; // optional leading record so the SSID is in the pcap
+};
+
 class PentagotchiApp {
 public:
     explicit PentagotchiApp(EInkDisplay &display);
@@ -34,7 +63,7 @@ private:
     void rotateChannel();
     void performDeauthCycle();
     void ensureStorageReady();
-    void saveHandshake(const wifi_promiscuous_pkt_t *packet);
+    void saveHandshake(const HandshakeCapture &capture);
     void updatePwnUiData();
     void updateUptime();
 
