@@ -28,7 +28,7 @@ extern "C" {
 #define PWN_Y_APS        0
 #define PWN_X_UPTIME     169
 #define PWN_Y_UPTIME     0
-#define PWN_X_STATUS     110
+#define PWN_X_STATUS     116
 #define PWN_Y_STATUS     20
 #define PWN_STATUS_MAX   20
 #define PWN_X_FRIEND_FACE 0
@@ -49,10 +49,11 @@ extern "C" {
 #define PWN_FACE_LOOK_L_HAPPY "(^_^ )"
 #define PWN_FACE_SLEEP        "(-_-)"
 #define PWN_FACE_SLEEP2       "(= =)"
+#define PWN_FACE_NAP          "(-o-)"
 #define PWN_FACE_AWAKE        "(^_^)"
 #define PWN_FACE_BORED        "(-_-)"
 #define PWN_FACE_INTENSE      "(>_<)"
-#define PWN_FACE_COOL         "(0_0)"
+#define PWN_FACE_COOL         "(-0_0)"
 #define PWN_FACE_HAPPY        "(*_*)"
 #define PWN_FACE_GRATEFUL     "(^-^)"
 #define PWN_FACE_EXCITED      "(^o^)"
@@ -105,6 +106,10 @@ const char *pwn_ui_get_mode(void);
 void pwn_ui_commit(void);
 void pwn_ui_full_commit(void);
 void pwn_ui_force_update(void);
+
+// Periodic UI maintenance (sleep-face animation). Cheap; call from the app's
+// regular redraw tick (updateUi).
+void pwn_ui_tick(void);
 
 // Event helpers — set face+status and update
 void pwn_ui_on_handshake(void);

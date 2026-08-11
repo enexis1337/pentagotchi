@@ -65,6 +65,12 @@ void PentagotchiApp::begin() {
                   config_.name, config_.lang, config_.deauth_enabled, config_.display.rotation,
                   config_.serial);
 
+    // SmartCap glue. Live/observe is gated on pwny.deauth: deauth_enabled=false
+    // keeps the observer-and-log dry-run, true hands the FSM the channel hopping
+    // and the targeted deauths (the legacy rotateChannel/performDeauthCycle path
+    // that used the same airtime is gone).
+    smartcap_service_init(config_.deauth_enabled);
+
     // Display rotation from config (new")/inverted -> 180)
     if (strncmp(config_.display.rotation, "inverted", 8) == 0 ||
         strncmp(config_.display.rotation, "left", 4) == 0) {
@@ -88,8 +94,6 @@ void PentagotchiApp::begin() {
     pwn_ui_on_starting();
     pwn_ui_commit();
 
-    deauthEnabled = config_.deauth_enabled;
-
     if (config_.gps_enabled) {
         gps_init();
     }
@@ -103,6 +107,8 @@ void PentagotchiApp::begin() {
 
 void PentagotchiApp::loop() {
     const uint32_t now = millis();
+
+    smartcap_service_tick(); // drives the SmartCap FSM (dry-run: no airtime)
 
     gPlugins.poll();
 
@@ -125,15 +131,15 @@ void PentagotchiApp::loop() {
     }
 
     if (now - lastCycleTs > kScanCycleMs) {
-        rotateChannel();
-
+        // Channel hopping / deauths are owned by the SmartCap FSM (live mode
+        // only; observe-only dry-run leaves the radio alone). This block only
+        // updates the mesh/grid bookkeeping and the per-cycle event.
         uint32_t elapsedSec = (millis() - startTime) / 1000;
         pentagotchi_grid_update(elapsedSec, gHandshakeCount, stats_.total_pwnd, pwn_ui_get_face());
         pentagotchi_grid_send_beacon();
         pentagotchi_grid_prune();
 
         updatePwnUiData();
-        if (deauthEnabled) { performDeauthCycle(); }
 
         pwn_event_t ev = {};
         ev.value = readWifiChannel();

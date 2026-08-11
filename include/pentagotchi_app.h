@@ -60,8 +60,6 @@ public:
 private:
     void initWifi();
     void updateUi(bool fullRefresh);
-    void rotateChannel();
-    void performDeauthCycle();
     void ensureStorageReady();
     void saveHandshake(const HandshakeCapture &capture);
     void updatePwnUiData();
@@ -69,10 +67,8 @@ private:
 
     static void wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_type_t type);
     static bool isItEapol(const wifi_promiscuous_pkt_t *packet);
-    uint8_t currentChannelIndex{0};
     uint32_t lastCycleTs{0};
     bool storageReady{false};
-    bool deauthEnabled{false};
     uint32_t startTime{0};
     pentagotchi_config_t config_{};
     pentagotchi_stats_t stats_{};

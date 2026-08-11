@@ -22,19 +22,7 @@
 
 using namespace pentagotchi::detail;
 
-extern "C" esp_err_t esp_wifi_internal_tx(wifi_interface_t ifx, const void *buffer, int len);
-
 namespace {
-
-esp_err_t sendRawFrame(wifi_interface_t ifx, const void *frame, int len, const char *tag) {
-    esp_err_t err = esp_wifi_internal_tx(ifx, frame, len);
-    if (err == ESP_ERR_NOT_SUPPORTED || err == ESP_ERR_INVALID_ARG) {
-        ESP_LOGW(kLogTag, "%s internal TX unsupported on iface %d (%s); falling back",
-                 tag, static_cast<int>(ifx), esp_err_to_name(err));
-        err = esp_wifi_80211_tx(ifx, frame, len, false);
-    }
-    return err;
-}
 
 /* ------------------------------------------------------------------ */
 /* 4-way handshake capture state (borrowed from the Bruce firmware's   */
@@ -224,71 +212,6 @@ void PentagotchiApp::initWifi() {
     initHandshakeCapture();
 }
 
-void PentagotchiApp::rotateChannel() {
-    static const uint8_t kChannels[] = {1, 6, 11};
-    constexpr size_t kChannelCount = sizeof(kChannels) / sizeof(kChannels[0]);
-    currentChannelIndex = (currentChannelIndex + 1) % kChannelCount;
-    const uint8_t channel = kChannels[currentChannelIndex];
-    if (esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE) != ESP_OK) {
-        ESP_LOGW(kLogTag, "Failed to set channel %u", channel);
-    }
-
-    pwn_event_t ev = {};
-    ev.value = channel;
-    pwn_events_raise(PWN_EVENT_CHANNEL_CHANGED, &ev);
-}
-
-void PentagotchiApp::performDeauthCycle() {
-    std::vector<BeaconEntry> snapshot;
-    snapshot.reserve(gRegisteredBeacons.size());
-    portENTER_CRITICAL(&gRadioMux);
-    std::copy(gRegisteredBeacons.begin(), gRegisteredBeacons.end(), std::back_inserter(snapshot));
-    portEXIT_CRITICAL(&gRadioMux);
-
-    if (snapshot.empty()) { return; }
-
-    uint8_t originalChannel = readWifiChannel();
-
-    for (const auto &entry : snapshot) {
-        if (entry.channel != originalChannel) { continue; }
-
-        // Skip networks in config whitelist
-        bool whitelisted = false;
-        for (uint8_t w = 0; w < config_.whitelist_count; ++w) {
-            if (memcmp(config_.whitelist[w], entry.mac, 6) == 0) {
-                whitelisted = true;
-                break;
-            }
-        }
-        if (whitelisted) { continue; }
-
-        uint8_t frame[sizeof(kDeauthFrameTemplate)];
-        memcpy(frame, kDeauthFrameTemplate, sizeof(kDeauthFrameTemplate));
-        memcpy(frame + 10, entry.mac, 6);
-        memcpy(frame + 16, entry.mac, 6);
-
-        char macStr[18];
-        snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
-                 entry.mac[0], entry.mac[1], entry.mac[2],
-                 entry.mac[3], entry.mac[4], entry.mac[5]);
-
-        esp_wifi_set_channel(entry.channel, WIFI_SECOND_CHAN_NONE);
-        for (int i = 0; i < 3; ++i) {
-            esp_err_t err = sendRawFrame(WIFI_IF_STA, frame, sizeof(frame), "Deauth");
-            if (err != ESP_OK) {
-                ESP_LOGW(kLogTag, "Deauth tx failed on STA iface: %s", esp_err_to_name(err));
-            }
-        }
-
-        pwn_event_t ev = {};
-        ev.mac = entry.mac;
-        ev.str = entry.ssid[0] ? entry.ssid : macStr;
-        pwn_events_raise(PWN_EVENT_DEAUTH_SENT, &ev);
-    }
-
-    esp_wifi_set_channel(originalChannel, WIFI_SECOND_CHAN_NONE);
-}
-
 bool PentagotchiApp::isItEapol(const wifi_promiscuous_pkt_t *packet) {
     const uint8_t *frame = packet->payload;
     const int len = packet->rx_ctrl.sig_len;
@@ -356,6 +279,14 @@ void PentagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_typ
         break;
     default:
         break;
+    }
+
+    // SmartCap RX lens: feed mgmt/data frames into the radio adapter in both
+    // modes. The adapter is the only seam to the air - dry-run keeps it
+    // receive-only, live mode lets the FSM act through it.
+    if (frameType == 0x00 || frameType == 0x02) {
+        smartcap_service_feed_frame(frame, packet->rx_ctrl.sig_len,
+                                    packet->rx_ctrl.rssi, packet->rx_ctrl.channel);
     }
 
     if (frameType == 0x02) {

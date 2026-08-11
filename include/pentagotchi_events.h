@@ -22,6 +22,7 @@ typedef enum {
     PWN_EVENT_PEER_GONE,         // grid peer pruned/timed out (str = name/identity)
     PWN_EVENT_FRIEND,            // peer crossed the friend threshold
     PWN_EVENT_MOOD_CHANGED,      // mood switched (value = pwn_mood_t)
+    PWN_EVENT_COOLDOWN,          // FSM COOLDOWN entered (value = cooldown duration ms)
     PWN_EVENT_STATS_CLEARED,     // cumulative counters reset via CLI
     PWN_EVENT_COUNT
 } pwn_event_id_t;

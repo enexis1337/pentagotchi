@@ -135,4 +135,13 @@ inline uint8_t readWifiChannel() {
 
 extern "C" esp_err_t esp_wifi_80211_tx(wifi_interface_t ifx, const void *buffer, int len, bool en_sys_seq);
 
+// SmartCap subsystem (see src/smartcap_service.cpp). `live` comes from
+// config.deauth_enabled: false keeps the observer-and-log only behavior (no TX,
+// no real channel control); true hands the FSM the channel hopping + targeted
+// deauths, which requires the legacy rotateChannel()/performDeauthCycle() path
+// to have been retired.
+void smartcap_service_init(bool live);
+void smartcap_service_feed_frame(const uint8_t *frame, uint16_t len, int8_t rssi, uint8_t channel);
+void smartcap_service_tick(void);
+
 } // namespace pentagotchi::detail

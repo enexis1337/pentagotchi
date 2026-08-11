@@ -28,6 +28,7 @@ static const char *const kEventNames[PWN_EVENT_COUNT] = {
     "peer_gone",
     "friend",
     "mood_changed",
+    "cooldown",
     "stats_cleared",
 };
 

@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdio.h>
+#include <Arduino.h>
 #include "esp_log.h"
 #include "esp_random.h"
 #include "eink_display.h"
@@ -13,6 +14,12 @@ static pwn_ui_state_t s_state;
 static pwn_ui_state_t s_prev;
 static bool s_dirty = false;
 static bool s_force = false;
+
+// FSM COOLDOWN sleep animation state (see ui_on_event_cooldown / pwn_ui_tick).
+static bool s_sleeping = false;
+static uint32_t s_sleep_until_ms = 0;
+static uint32_t s_sleep_next_face_ms = 0;
+static char s_sleep_status[PWN_STATUS_LEN];
 
 static bool str_changed(const char *a, const char *b)
 {
@@ -452,6 +459,76 @@ static void ui_on_event_deauth(const pwn_event_t *ev)
     pwn_ui_on_deauth(ev && ev->str ? ev->str : "");
 }
 
+// FSM COOLDOWN: the device "sleeps" for the pause between retries. Face
+// alternates (-_-) / (-o-) once per second thanks to pwn_ui_tick().
+static const char *const kCooldownPhrases[] = {
+    "ZzzzzzzZzzzzz...",
+    "Goodnight!",
+};
+
+// Spoken the moment the nap ends, replacing the sleep face with the awake one.
+static const char *const kWakePhrases[] = {
+    "Woke up!\nI'm back!",
+    "Rise and shine!",
+    "That was a\nnice nap!",
+    "Back online!\nLet's hunt!",
+    "Rested and\nready to pwn!",
+    "Yawn... okay,\nlet's go!",
+};
+
+static void ui_on_event_cooldown(const pwn_event_t *ev)
+{
+    const uint32_t ms = (ev && ev->value > 0) ? (uint32_t)ev->value : 2000;
+    const uint32_t secs = (ms + 999) / 1000;
+
+    char nap[PWN_STATUS_LEN];
+    snprintf(nap, sizeof(nap), "Napping for %us", (unsigned)secs);
+
+    const char *phrases[3] = { nap, kCooldownPhrases[0], kCooldownPhrases[1] };
+    snprintf(s_sleep_status, sizeof(s_sleep_status), "%s", phrases[esp_random() % 3]);
+
+    const uint32_t now = millis();
+    s_sleeping = true;
+    s_sleep_until_ms = now + ms;
+    s_sleep_next_face_ms = now + 1000;
+
+    pwn_ui_set_face(PWN_FACE_SLEEP);
+    pwn_ui_set_status(s_sleep_status);
+    pwn_ui_force_update();
+}
+
+void pwn_ui_tick(void)
+{
+    if (!s_sleeping) { return; }
+
+    const uint32_t now = millis();
+    if (now >= s_sleep_until_ms) {
+        // Cooldown over: wake up with a phrase instead of an empty status; the
+        // next FSM action (deauth / scan cycle) takes over from here.
+        s_sleeping = false;
+        const size_t n = sizeof(kWakePhrases) / sizeof(kWakePhrases[0]);
+        pwn_ui_set_face(PWN_FACE_AWAKE);
+        pwn_ui_set_status(kWakePhrases[esp_random() % n]);
+        pwn_ui_force_update();
+        return;
+    }
+
+    // Keep the sleep frame/phrase on screen even if some other event tried to
+    // overwrite them in the middle of the pause.
+    if (strcmp(s_state.face, PWN_FACE_SLEEP) != 0 && strcmp(s_state.face, PWN_FACE_NAP) != 0) {
+        pwn_ui_set_face(PWN_FACE_SLEEP);
+    }
+    if (strcmp(s_state.status, s_sleep_status) != 0) {
+        pwn_ui_set_status(s_sleep_status);
+    }
+
+    // Alternate the two sleep faces once per second.
+    if (now >= s_sleep_next_face_ms) {
+        s_sleep_next_face_ms = now + 1000;
+        pwn_ui_set_face(strcmp(s_state.face, PWN_FACE_SLEEP) == 0 ? PWN_FACE_NAP : PWN_FACE_SLEEP);
+    }
+}
+
 static const char *const kPeerDetectedPhrases[] = {
     "Hi %s!\nWant to be friends?",
     "Aww, look!\nIt's %s!",
@@ -632,6 +709,7 @@ void pwn_ui_bind_events(void)
     pwn_events_subscribe(PWN_EVENT_AP_DETECTED, ui_on_event_ap_detected, "ui_ap");
     pwn_events_subscribe(PWN_EVENT_HANDSHAKE, ui_on_event_handshake, "ui_handshake");
     pwn_events_subscribe(PWN_EVENT_DEAUTH_SENT, ui_on_event_deauth, "ui_deauth");
+    pwn_events_subscribe(PWN_EVENT_COOLDOWN, ui_on_event_cooldown, "ui_cooldown");
     pwn_events_subscribe(PWN_EVENT_PEER_DETECTED, ui_on_event_peer_detected, "ui_peer");
     pwn_events_subscribe(PWN_EVENT_PEER_ENCOUNTER, ui_on_event_peer_encounter, "ui_encounter");
     pwn_events_subscribe(PWN_EVENT_FRIEND, ui_on_event_friend, "ui_friend");
