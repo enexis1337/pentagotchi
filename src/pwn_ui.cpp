@@ -638,7 +638,8 @@ static void ui_on_event_boot(const pwn_event_t *ev)
     pwn_ui_full_commit();
     delay(500);
 
-    pwn_ui_on_normal();
+    const size_t n = sizeof(kWakePhrases) / sizeof(kWakePhrases[0]);
+    pwn_ui_set_status(kWakePhrases[esp_random() % n]);
     pwn_ui_full_commit();
 }
 
