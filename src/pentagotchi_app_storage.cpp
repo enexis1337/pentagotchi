@@ -142,7 +142,7 @@ void PentagotchiApp::saveHandshake(const wifi_promiscuous_pkt_t *packet) {
     ESP_LOGI(kLogTag, "Handshake saved to %s (%u bytes)", path.c_str(), packet->rx_ctrl.sig_len);
     SERIAL_PRINTF("[pentagotchi] Handshake saved to %s (%u bytes)\n", path.c_str(), packet->rx_ctrl.sig_len);
 
-    if (config.gps_enabled) {
+    if (config_.gps_enabled) {
         if (gps_has_fix()) {
             String gpsPath = kHandshakeDir;
             if (!gpsPath.endsWith("/")) { gpsPath += "/"; }

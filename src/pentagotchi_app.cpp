@@ -4,6 +4,7 @@
 #include "pentagotchi_events.h"
 #include "pentagotchi_gps.h"
 #include "pentagotchi_internal.h"
+#include "pentagotchi_plugins.h"
 
 #include <esp_log.h>
 #include <esp_random.h>
@@ -54,46 +55,47 @@ void PentagotchiApp::begin() {
     ensureStorageReady();
 
     // Config: defaults from code, optional override from /config.json on SD
-    pentagotchi_config_set_defaults(&config);
-    if (storageReady && !pentagotchi_config_load(&config, true)) {
-        pentagotchi_config_save(&config, true); // create a default config file
+    pentagotchi_config_set_defaults(&config_);
+    if (storageReady && !pentagotchi_config_load(&config_, true)) {
+        pentagotchi_config_save(&config_, true); // create a default config file
     }
-    gSerialEnabled = config.serial;
-    esp_log_level_set("*", config.serial ? ESP_LOG_INFO : ESP_LOG_NONE);
-    SERIAL_PRINTF("[pentagotchi] config: name=\"%s\" lang=%s deauth=%d rotation=%s serial=%d\n",
-                  config.name, config.lang, config.deauth_enabled, config.display.rotation,
-                  config.serial);
+    gSerialEnabled = config_.serial;
+    esp_log_level_set("*", config_.serial ? ESP_LOG_INFO : ESP_LOG_NONE);
+    SERIAL_PRINTF("[pentagotchi] config_:? name=\"%s\" lang=%s deauth=%d rotation=%s serial=%d\n",
+                  config_.name, config_.lang, config_.deauth_enabled, config_.display.rotation,
+                  config_.serial);
 
     // Display rotation from config (new")/inverted -> 180)
-    if (strncmp(config.display.rotation, "inverted", 8) == 0 ||
-        strncmp(config.display.rotation, "left", 4) == 0) {
+    if (strncmp(config_.display.rotation, "inverted", 8) == 0 ||
+        strncmp(config_.display.rotation, "left", 4) == 0) {
         eink_set_rotation(180);
     } else {
         eink_set_rotation(0);
     }
 
     // Invert colors when ui.display.color = black
-    eink_set_invert(strncmp(config.display.color, "black", 5) == 0);
+    eink_set_invert(strncmp(config_.display.color, "black", 5) == 0);
 
     randomSeed(esp_random());
 
-    pentagotchi_stats_load(&stats);
-    pentagotchi_grid_init(config.name, stats.total_pwnd);
-    pentagotchi_grid_set_enabled(config.grid_enabled);
+    pentagotchi_stats_load(&stats_);
+    pentagotchi_grid_init(config_.name, stats_.total_pwnd);
+    pentagotchi_grid_set_enabled(config_.grid_enabled);
     pwn_ui_init();
     pwn_ui_bind_events();
     eink_set_full_refresh_interval(kFullRefreshIntervalS);
-    pwn_ui_set_name(config.name);
+    pwn_ui_set_name(config_.name);
     pwn_ui_on_starting();
     pwn_ui_commit();
 
-    deauthEnabled = config.deauth_enabled;
+    deauthEnabled = config_.deauth_enabled;
 
-    if (config.gps_enabled) {
+    if (config_.gps_enabled) {
         gps_init();
     }
 
     initWifi();
+    gPlugins.begin();
     pwn_events_raise_simple(PWN_EVENT_BOOT);
     lastCycleTs = millis();
     startTime = millis();
@@ -102,14 +104,16 @@ void PentagotchiApp::begin() {
 void PentagotchiApp::loop() {
     const uint32_t now = millis();
 
-    if (config.gps_enabled) { gps_update(); }
+    gPlugins.poll();
+
+    if (config_.gps_enabled) { gps_update(); }
 
     handleSerialCommands();
 
     if (handshakePending) {
         handshakePending = false;
         char shakes[PWN_STR_LEN];
-        buildShakesLine(shakes, sizeof(shakes), gHandshakeCount, (unsigned long)stats.total_pwnd,
+        buildShakesLine(shakes, sizeof(shakes), gHandshakeCount, (unsigned long)stats_.total_pwnd,
                         gLastPwndName.c_str());
         pwn_ui_set_shakes(shakes);
 
@@ -122,7 +126,7 @@ void PentagotchiApp::loop() {
         rotateChannel();
 
         uint32_t elapsedSec = (millis() - startTime) / 1000;
-        pentagotchi_grid_update(elapsedSec, gHandshakeCount, stats.total_pwnd, pwn_ui_get_face());
+        pentagotchi_grid_update(elapsedSec, gHandshakeCount, stats_.total_pwnd, pwn_ui_get_face());
         pentagotchi_grid_send_beacon();
         pentagotchi_grid_prune();
 
@@ -151,7 +155,7 @@ void PentagotchiApp::loop() {
     // Throttled NVS flush of persistent counters (avoids flash wear)
     if (now - lastStatsFlush >= kStatsSaveIntervalMs) {
         if (statsChanges != 0) {
-            pentagotchi_stats_save(&stats);
+            pentagotchi_stats_save(&stats_);
             statsChanges = 0;
         }
         lastStatsFlush = now;
@@ -176,10 +180,12 @@ void PentagotchiApp::handleSerialCommands() {
             end[1] = '\0';
 
             if (strcmp(start, "clearstats") == 0) {
-                stats.total_aps = 0;
-                stats.total_pwnd = 0;
+                stats_.total_aps = 0;
+                stats_.total_pwnd = 0;
                 statsChanges = 0;
-                pentagotchi_stats_save(&stats);
+                gHandshakeBssids.clear();
+                gHandshakeCount = 0;
+                pentagotchi_stats_save(&stats_);
                 Serial.println("> stats cleared");
                 SERIAL_PRINTLN("[pentagotchi] stats cleared");
                 pwn_events_raise_simple(PWN_EVENT_STATS_CLEARED);
@@ -195,7 +201,7 @@ void PentagotchiApp::handleSerialCommands() {
                                   pwn_events_handler_tag(i));
                 }
             } else if (strcmp(start, "gps") == 0) {
-                if (!config.gps_enabled) {
+                if (!config_.gps_enabled) {
                     Serial.println("> gps disabled");
                 } else {
                     const gps_fix_t *fx = gps_fix();
@@ -247,7 +253,7 @@ void PentagotchiApp::updatePwnUiData() {
     portEXIT_CRITICAL(&gRadioMux);
 
     char aps[24];
-    snprintf(aps, sizeof(aps), "%zu (%lu)", currentChannelAps, (unsigned long)stats.total_aps);
+    snprintf(aps, sizeof(aps), "%zu (%lu)", currentChannelAps, (unsigned long)stats_.total_aps);
     pwn_ui_set_aps(aps);
 
     uint32_t elapsed = (millis() - startTime) / 1000;
@@ -259,7 +265,7 @@ void PentagotchiApp::updatePwnUiData() {
     pwn_ui_set_uptime(uptime);
 
     char shakes[PWN_STR_LEN];
-    buildShakesLine(shakes, sizeof(shakes), gHandshakeCount, (unsigned long)stats.total_pwnd,
+    buildShakesLine(shakes, sizeof(shakes), gHandshakeCount, (unsigned long)stats_.total_pwnd,
                     gLastPwndName.c_str());
     pwn_ui_set_shakes(shakes);
 

@@ -156,8 +156,8 @@ bool pentagotchi_config_load(pentagotchi_config_t *cfg, bool sd_ready) {
 
     if (doc["pwny"].is<JsonObject>()) {
         JsonObject pwny = doc["pwny"];
-    cfg->deauth_enabled = pwny["deauth_enabled"] | cfg->deauth_enabled;
-    cfg->serial = pwny["serial"] | cfg->serial;
+        cfg->deauth_enabled = pwny["deauth_enabled"] | cfg->deauth_enabled;
+        cfg->serial = pwny["serial"] | cfg->serial;
     }
 
     ESP_LOGI(kLogTag, "Loaded config from %s (name=%s lang=%s deauth=%d whitelist=%u)",

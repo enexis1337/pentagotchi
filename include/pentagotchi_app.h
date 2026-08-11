@@ -23,6 +23,11 @@ public:
     EInkDisplay &display;
     volatile bool handshakePending{false};
 
+    // Read-only access for external modules (JS plugin bridge, ...)
+    const pentagotchi_config_t &config() const { return config_; }
+    const pentagotchi_stats_t &stats() const { return stats_; }
+    uint32_t uptimeSec() const { return startTime == 0 ? 0 : (millis() - startTime) / 1000; }
+
 private:
     void initWifi();
     void updateUi(bool fullRefresh);
@@ -40,8 +45,8 @@ private:
     bool storageReady{false};
     bool deauthEnabled{false};
     uint32_t startTime{0};
-    pentagotchi_config_t config{};
-    pentagotchi_stats_t stats{};
+    pentagotchi_config_t config_{};
+    pentagotchi_stats_t stats_{};
     uint32_t statsChanges{0};
     uint32_t lastStatsFlush{0};
 };

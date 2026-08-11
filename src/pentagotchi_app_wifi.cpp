@@ -93,8 +93,8 @@ void PentagotchiApp::performDeauthCycle() {
 
         // Skip networks in config whitelist
         bool whitelisted = false;
-        for (uint8_t w = 0; w < config.whitelist_count; ++w) {
-            if (memcmp(config.whitelist[w], entry.mac, 6) == 0) {
+        for (uint8_t w = 0; w < config_.whitelist_count; ++w) {
+            if (memcmp(config_.whitelist[w], entry.mac, 6) == 0) {
                 whitelisted = true;
                 break;
             }
@@ -246,7 +246,7 @@ void PentagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_typ
         if (gHandshakeBssids.find(bssidKey) == gHandshakeBssids.end()) {
             gHandshakeBssids.insert(bssidKey);
             ++gHandshakeCount;
-            ++gInstance->stats.total_pwnd;
+            ++gInstance->stats_.total_pwnd;
             ++gInstance->statsChanges;
             gInstance->handshakePending = true;
 
@@ -317,7 +317,7 @@ void PentagotchiApp::wifiPromiscuousCallback(void *buf, wifi_promiscuous_pkt_typ
             auto inserted = gRegisteredBeacons.insert(entry);
             portEXIT_CRITICAL(&gRadioMux);
             if (inserted.second) {
-                ++gInstance->stats.total_aps;
+                ++gInstance->stats_.total_aps;
                 ++gInstance->statsChanges;
 
                 pwn_event_t ev = {};

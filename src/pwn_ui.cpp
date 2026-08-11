@@ -278,6 +278,14 @@ const char *pwn_ui_get_face(void)
     return s_state.face;
 }
 
+const char *pwn_ui_get_channel(void) { return s_state.channel; }
+const char *pwn_ui_get_aps(void) { return s_state.aps; }
+const char *pwn_ui_get_uptime(void) { return s_state.uptime; }
+const char *pwn_ui_get_name(void) { return s_state.name; }
+const char *pwn_ui_get_status(void) { return s_state.status; }
+const char *pwn_ui_get_shakes(void) { return s_state.shakes; }
+const char *pwn_ui_get_mode(void) { return s_state.mode; }
+
 void pwn_ui_commit(void)
 {
     check_dirty();

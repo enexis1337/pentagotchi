@@ -94,6 +94,13 @@ void pwn_ui_set_shakes(const char *val);
 void pwn_ui_set_mode(const char *val);
 void pwn_ui_set_friend(const char *face, const char *name, int rssi);
 const char *pwn_ui_get_face(void);
+const char *pwn_ui_get_channel(void);
+const char *pwn_ui_get_aps(void);
+const char *pwn_ui_get_uptime(void);
+const char *pwn_ui_get_name(void);
+const char *pwn_ui_get_status(void);
+const char *pwn_ui_get_shakes(void);
+const char *pwn_ui_get_mode(void);
 
 void pwn_ui_commit(void);
 void pwn_ui_full_commit(void);
