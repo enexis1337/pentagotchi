@@ -42,33 +42,33 @@ extern "C" {
 #define PWN_LINE1_Y      14
 #define PWN_LINE2_Y      107
 
-// Pentagotchi-style ASCII faces (all plain ASCII, renderable by ANY u8g2 font)
-#define PWN_FACE_LOOK_R       "( o_o)"
-#define PWN_FACE_LOOK_L       "(O_O )"
-#define PWN_FACE_LOOK_R_HAPPY "( ^_^)"
-#define PWN_FACE_LOOK_L_HAPPY "(^_^ )"
-#define PWN_FACE_SLEEP        "(-_-)"
-#define PWN_FACE_SLEEP2       "(= =)"
+// Original pwnagotchi faces (UTF-8, rendered by DejaVuSansMono27 face font)
+#define PWN_FACE_LOOK_R       "( \342\232\206_\342\232\206)"          // ( ⚆_⚆)
+#define PWN_FACE_LOOK_L       "(\342\230\211_\342\230\211 )"          // (☉_☉ )
+#define PWN_FACE_LOOK_R_HAPPY "( \342\227\225\342\200\277\342\227\225)"    // ( ◕‿◕)
+#define PWN_FACE_LOOK_L_HAPPY "(\342\227\225\342\200\277\342\227\225 )"    // (◕‿◕ )
+#define PWN_FACE_SLEEP        "(\342\207\200\342\200\277\342\200\277\342\206\274)" // (⇀‿‿↼)
+#define PWN_FACE_SLEEP2       "(\342\211\226\342\200\277\342\200\277\342\211\226)" // (≖‿‿≖)
 #define PWN_FACE_NAP          "(-o-)"
-#define PWN_FACE_AWAKE        "(^_^)"
-#define PWN_FACE_BORED        "(-_-)"
-#define PWN_FACE_INTENSE      "(>_<)"
-#define PWN_FACE_COOL         "(-0_0)"
-#define PWN_FACE_HAPPY        "(*_*)"
-#define PWN_FACE_GRATEFUL     "(^-^)"
-#define PWN_FACE_EXCITED      "(^o^)"
-#define PWN_FACE_MOTIVATED    "(^-^)"
-#define PWN_FACE_DEMOTIVATED  "(=_=)"
-#define PWN_FACE_SMART        "(*_*)"
-#define PWN_FACE_LONELY       "(;_ ;)"
-#define PWN_FACE_SAD          "(T_T)"
+#define PWN_FACE_AWAKE        "(\342\227\225\342\200\277\342\200\277\342\227\225)" // (◕‿‿◕)
+#define PWN_FACE_BORED        "(-__-)"
+#define PWN_FACE_INTENSE      "(\302\260\342\226\203\342\226\203\302\260)"   // (°▃▃°)
+#define PWN_FACE_COOL         "(\342\214\220\342\226\240_\342\226\240)"    // (⌐■_■)
+#define PWN_FACE_HAPPY        "(\342\200\242\342\200\277\342\200\277\342\200\242)" // (•‿‿•)
+#define PWN_FACE_GRATEFUL     "(^\342\200\277\342\200\277^)"          // (^‿‿^)
+#define PWN_FACE_EXCITED      "(\341\265\224\342\227\241\342\227\241\341\265\224)" // (ᵔ◡◡ᵔ)
+#define PWN_FACE_MOTIVATED    "(\342\230\274\342\200\277\342\200\277\342\230\274)" // (☼‿‿☼)
+#define PWN_FACE_DEMOTIVATED  "(\342\211\226__\342\211\226)"          // (≖__≖)
+#define PWN_FACE_SMART        "(\342\234\234\342\200\277\342\200\277\342\234\234)" // (✜‿‿✜)
+#define PWN_FACE_LONELY       "(\330\250__\330\250)"                 // (ب__ب)
+#define PWN_FACE_SAD          "(\342\225\245\342\230\201\342\225\245 )"       // (╥☁╥ )
 #define PWN_FACE_ANGRY        "(-_-')"
-#define PWN_FACE_FRIEND       "(^_^)"
-#define PWN_FACE_BROKEN       "(X_X)"
-#define PWN_FACE_DEBUG        "(#_#)"
-#define PWN_FACE_UPLOAD       "(._.)"
-#define PWN_FACE_UPLOAD1      "(._.)"
-#define PWN_FACE_UPLOAD2      "(._.)"
+#define PWN_FACE_FRIEND       "(\342\231\245\342\200\277\342\200\277\342\231\245)" // (♥‿‿♥)
+#define PWN_FACE_BROKEN       "(\342\230\223\342\200\277\342\200\277\342\230\223)" // (☓‿‿☓)
+#define PWN_FACE_DEBUG        "(#__#)"
+#define PWN_FACE_UPLOAD       "(1__0)"
+#define PWN_FACE_UPLOAD1      "(1__1)"
+#define PWN_FACE_UPLOAD2      "(0__1)"
 
 typedef struct {
     char channel[PWN_STR_LEN];

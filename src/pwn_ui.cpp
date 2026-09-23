@@ -72,6 +72,17 @@ static void draw_text(int x, int y, const char *text, const uint8_t *font)
     u8g2_DrawStr(&g_u8g2, x, y, text);
 }
 
+// UTF-8 aware drawing (required for the unicode pwnagotchi faces)
+static void draw_text_utf8(int x, int y, const char *text, const uint8_t *font)
+{
+    u8g2_SetFont(&g_u8g2, font);
+    u8g2_SetFontPosTop(&g_u8g2);
+    u8g2_DrawUTF8(&g_u8g2, x, y, text);
+}
+
+extern const uint8_t DejaVuSansMono27[];
+extern const uint8_t DejaVuSansMono8[];
+
 // True if the token at p is a full MAC address "AA:BB:CC:DD:EE:FF" (17 chars)
 static bool is_mac_byte(char c)
 {
@@ -121,7 +132,7 @@ static void pwn_ui_render(void)
     int spaceW = u8g2_GetStrWidth(&g_u8g2, " ");
     u8g2_DrawStr(&g_u8g2, PWN_X_NAME + nameW + spaceW, PWN_Y_NAME, PWN_NAME_PROMPT);
 
-    draw_text(PWN_X_FACE, PWN_Y_FACE, s_state.face, u8g2_font_courB24_tf);
+    draw_text_utf8(PWN_X_FACE, PWN_Y_FACE, s_state.face, DejaVuSansMono27);
 
     u8g2_SetFont(&g_u8g2, u8g2_font_6x12_tf);
     u8g2_SetFontPosTop(&g_u8g2);
@@ -185,8 +196,8 @@ static void pwn_ui_render(void)
     if (strlen(s_state.friend_face) > 0 || s_state.friend_rssi > -1000) {
         int fx = PWN_X_FRIEND_FACE;
         if (strlen(s_state.friend_face) > 0) {
-            draw_text(fx, PWN_Y_FRIEND_FACE, s_state.friend_face, u8g2_font_6x10_tf);
-            fx += u8g2_GetStrWidth(&g_u8g2, s_state.friend_face) + 4;
+            draw_text_utf8(fx, PWN_Y_FRIEND_FACE, s_state.friend_face, DejaVuSansMono8);
+            fx += u8g2_GetUTF8Width(&g_u8g2, s_state.friend_face) + 4;
         }
 
         int bars = 0;
