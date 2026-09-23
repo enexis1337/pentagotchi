@@ -3,9 +3,10 @@
 // Drop this file into /plugins/ on the SD card. The firmware loads every
 // *.js it finds there and calls the on_* hooks wired to firmware events.
 //
-// Plugins are disabled by default. Flip "enabled" to true in /plugins.json
-// (created automatically at the SD root) to activate this one:
-//     { "plugins": { "example": { "enabled": true, ... } } }
+// New plugins are enabled by default: drop the file into /plugins/ and the
+// hooks run automatically. To switch one off, set "enabled" to false in
+// /plugins.json (created automatically at the SD root, then persisted):
+//     { "plugins": { "example": { "enabled": false, ... } } }
 //
 // __defaults__.options are seeded into /plugins.json the first time the
 // plugin is discovered; from then on the config file is the source of truth

@@ -407,7 +407,7 @@ JSValue js_pwn_plugin(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv
     bool isNew = plugin_config_entry_is_new(root, pluginName);
     JsonObject entry = root[pluginName].to<JsonObject>();
     if (isNew) {
-        entry["enabled"] = false; /* plugins start disabled */
+        entry["enabled"] = true; /* new plugins start enabled: drop-in and run */
         if (!JS_IsUndefined(declOptions)) {
             char buf[768];
             if (js_value_to_json(ctx, declOptions, buf, sizeof(buf))) {
