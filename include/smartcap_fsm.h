@@ -37,6 +37,7 @@ typedef struct {
     uint32_t scan_quick_period_ms; // dwell per channel while hunting (focus empty)
     uint32_t listen_timeout_ms;    // bound for LISTEN after an attack action
     uint32_t cooldown_ms;          // pause between a failed attempt and the next one
+    uint32_t focus_max_ms;         // cap on one continuous attack loop (0 = never force a rescan)
 } smartcap_fsm_params_t;
 
 typedef struct {
@@ -76,6 +77,7 @@ struct smartcap_fsm_s {
     const smartcap_target_t *current; // null outside ATTACK/LISTEN/COOLDOWN
     smartcap_strategy_t strategy;     // chosen for the current target
     uint32_t focus_started_ms;
+    uint32_t attack_loop_started_ms;  // first tick of the current attack loop
 
     // 4-way handshake progress for arbitrary targets (passive captures too)
     smartcap_hs_slot_t hs[SMCAP_MAX_HS_SLOTS];

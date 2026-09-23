@@ -199,7 +199,40 @@ void PentagotchiApp::initWifi() {
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+
+    if (config_.web.enabled) {
+        // Web UI over SoftAP: APSTA keeps the STA interface in promiscuous
+        // sniffing while the AP serves the status page at ui.web.address.
+        esp_netif_t *apNetif = esp_netif_create_default_wifi_ap();
+        if (apNetif) {
+            esp_netif_ip_info_t ip = {};
+            if (esp_netif_str_to_ip4(config_.web.address, &ip.ip) != ESP_OK) {
+                ip.ip.addr = ESP_IP4TOADDR(192, 168, 4, 1);
+            }
+            ip.netmask.addr = ESP_IP4TOADDR(255, 255, 255, 0);
+            ip.gw = ip.ip;
+            esp_netif_set_ip_info(apNetif, &ip);
+            esp_netif_dhcps_start(apNetif);
+        }
+
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+
+        wifi_config_t ap = {};
+        strncpy((char *)ap.ap.ssid, config_.name, sizeof(ap.ap.ssid) - 1);
+        ap.ap.ssid_len = static_cast<uint8_t>(strnlen(config_.name, 31));
+        ap.ap.channel = 1;
+        ap.ap.max_connection = 4;
+        if (config_.web.password[0]) {
+            ap.ap.authmode = WIFI_AUTH_WPA2_PSK;
+            strncpy((char *)ap.ap.password, config_.web.password, sizeof(ap.ap.password) - 1);
+        } else {
+            ap.ap.authmode = WIFI_AUTH_OPEN;
+        }
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap));
+    } else {
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    }
+
     ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(kTxPowerDefault));

@@ -20,6 +20,7 @@ void smartcap_fsm_params_default(smartcap_fsm_params_t *p) {
     p->scan_quick_period_ms = 1000; // hunt dwell when there is nothing to focus
     p->listen_timeout_ms = 4000;    // how long to wait for a handshake after acting
     p->cooldown_ms = 2000;          // pacing pause between a failed attempt and the next
+    p->focus_max_ms = 30000;        // force a rescan hop after 30s straight in an attack loop
 }
 
 void smartcap_fsm_begin(smartcap_fsm_t *f, smartcap_radio_t *radio,
@@ -35,6 +36,14 @@ void smartcap_fsm_begin(smartcap_fsm_t *f, smartcap_radio_t *radio,
     f->rescore_next_ms = now_ms + p->rescore_period_ms;
     f->stage_until_ms = now_ms + p->scan_quick_period_ms;
     smartcap_radio_set_channel(radio, kScanChannels[0]);
+}
+
+static void enterScan(smartcap_fsm_t *f, uint32_t now) {
+    f->fast = true;
+    f->scan_index = 0;
+    f->scan_hops = 0;
+    f->stage_until_ms = now + f->p.scan_quick_period_ms;
+    smartcap_radio_set_channel(f->radio, kScanChannels[0]);
 }
 
 smartcap_stage_t smartcap_fsm_stage(const smartcap_fsm_t *f) { return f->stage; }
@@ -212,6 +221,20 @@ static smartcap_stage_t stageRescore(smartcap_fsm_t *f, uint32_t now) {
     // per-packet.
     f->rescore_next_ms = now + f->p.rescore_period_ms;
     f->want_rescore = false;
+    // Forced rescan: if the attack loop has run uninterrupted for too long,
+    // bail out and hop through the scan channels again. Without this, a
+    // non-empty focus (e.g. a passive AP that never yields a handshake, or a
+    // busy channel kept hot by the recency bonus) keeps the FSM glued to one
+    // channel forever because SCAN is only reachable with an empty focus.
+    if (f->p.focus_max_ms != 0 && !f->fast &&
+        f->attack_loop_started_ms != 0 &&
+        (now - f->attack_loop_started_ms) >= f->p.focus_max_ms) {
+        fsmLog(f, "focus loop exceeded %u ms -> forced rescan",
+               static_cast<unsigned>(f->p.focus_max_ms));
+        f->attack_loop_started_ms = 0;
+        enterScan(f, now);
+        return SMCAP_STAGE_SCAN;
+    }
     return SMCAP_STAGE_FOCUS;
 }
 
@@ -226,14 +249,14 @@ static smartcap_stage_t stageFocus(smartcap_fsm_t *f, uint32_t now) {
     f->focus_started_ms = now;
     if (n == 0) {
         // Nothing worth acting on: back to scanning, fast hunt.
-        f->fast = true;
-        f->scan_index = 0;
-        f->scan_hops = 0;
-        f->stage_until_ms = now + f->p.scan_quick_period_ms;
-        smartcap_radio_set_channel(f->radio, kScanChannels[0]);
+        f->attack_loop_started_ms = 0;
+        enterScan(f, now);
         return SMCAP_STAGE_SCAN;
     }
     f->fast = false;
+    if (f->attack_loop_started_ms == 0) {
+        f->attack_loop_started_ms = now; // first entry into this attack loop
+    }
     f->focus_index = 0;
     return SMCAP_STAGE_ATTACK;
 }
@@ -363,18 +386,18 @@ static smartcap_stage_t stageListen(smartcap_fsm_t *f, uint32_t now) {
     }
 
     if (now >= f->stage_until_ms) {
-        // Timeout: this attempt failed (only an *active* method counts as a
-        // failed attempt for the scoring penalty).
-        const bool active = (f->strategy != SMCAP_STRATEGY_PASSIVE);
-        if (t && active) {
+        // Timeout: this attempt failed. Every method counts here, PASSIVE
+        // included: a listen that yields no handshake must still sink the
+        // target's score so a no-client AP cannot hold the focus forever.
+        if (t) {
             smartcap_target_t *m = smartcap_table_find(f->table, f->focus.entries[f->focus_index].bssid);
             if (m) {
                 m->last_attack_ms = now;
                 ++m->attack_count;
                 ++m->consecutive_failures;
-                fsmLog(f, "timeout after %u ms for %02X:%02X:...:%02X",
+                fsmLog(f, "timeout after %u ms for %02X:%02X:...:%02X (strategy %s)",
                        static_cast<unsigned>(f->p.listen_timeout_ms),
-                       t->bssid[0], t->bssid[1], t->bssid[5]);
+                       t->bssid[0], t->bssid[1], t->bssid[5], strategyName(f->strategy));
                 // attack_count only ever grows while the target stays open (a
                 // successful capture closes it), so it doubles as the
                 // consecutive-failure streak.
@@ -387,12 +410,8 @@ static smartcap_stage_t stageListen(smartcap_fsm_t *f, uint32_t now) {
             }
         }
         f->current = nullptr;
-        if (active) {
-            f->stage_until_ms = now + f->p.cooldown_ms;
-            return SMCAP_STAGE_COOLDOWN;
-        }
-        ++f->focus_index;
-        return (f->focus_index < f->focus.count) ? SMCAP_STAGE_ATTACK : SMCAP_STAGE_RESCORE;
+        f->stage_until_ms = now + f->p.cooldown_ms;
+        return SMCAP_STAGE_COOLDOWN;
     }
     return SMCAP_STAGE_LISTEN;
 }

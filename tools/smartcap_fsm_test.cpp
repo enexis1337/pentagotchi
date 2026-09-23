@@ -1113,6 +1113,84 @@ static void testExclusionPassiveCapture(void) {
     CHECK(ta->consecutive_failures == 0, "capture cleared the failure streak");
 }
 
+static void testFsForcedRescan(void) {
+    printf("fsm: attack loop is bounded by focus_max_ms (forced rescan):\n");
+    smartcap_radio_t r;
+    smartcap_radio_init(&r, &gOps);
+    smartcap_radio_set_logger(&r, captureLog);
+    smartcap_table_t t;
+    smartcap_table_init(&t);
+    smartcap_score_params_t sp;
+    smartcap_score_params_default(&sp);
+    smartcap_fsm_params_t fp;
+    smartcap_fsm_params_default(&fp);
+    fp.focus_max_ms = 10000; // shorten for the test
+
+    uint8_t ap[6], cli[6];
+    setMac(ap, 0x41, 0x41, 0x41);
+    setMac(cli, 0x42, 0x42, 0x42);
+    pushAp(&r, ap, 6, -50, "F", 0);
+    pushClient(&r, ap, 6, -50, cli, 0);
+
+    smartcap_fsm_t f = makeEmptyFsm(&r, &t, &sp, &fp);
+    resetLog();
+
+    // fast hunt -> RESCORE -> FOCUS -> ATTACK -> LISTEN (attack loop begins)
+    smartcap_fsm_tick(&f, 0);
+    smartcap_fsm_tick(&f, 1000);
+    smartcap_fsm_tick(&f, 2000);
+    smartcap_fsm_tick(&f, 3000);
+    CHECK(smartcap_fsm_stage(&f) == SMCAP_STAGE_LISTEN, "attack loop started");
+    CHECK(f.attack_loop_started_ms != 0, "attack loop start recorded");
+
+    // Keep failing (LISTEN timeout -> COOLDOWN -> retry). The loop must break
+    // back to SCAN once focus_max_ms has elapsed inside the loop.
+    bool sawScan = false;
+    for (uint32_t now = 4000; now <= 20000; now += 500) {
+        smartcap_fsm_tick(&f, now);
+        if (smartcap_fsm_stage(&f) == SMCAP_STAGE_SCAN) {
+            sawScan = true;
+        }
+    }
+    CHECK(sawScan, "forced rescan returns to SCAN after focus_max_ms");
+    CHECK(f.attack_loop_started_ms == 0, "attack loop start cleared on rescan");
+}
+
+static void testFsPassivePenalty(void) {
+    printf("fsm: passive timeout is penalized (target sinks out of focus):\n");
+    smartcap_radio_t r;
+    smartcap_radio_init(&r, &gOps);
+    smartcap_radio_set_logger(&r, captureLog);
+    smartcap_table_t t;
+    smartcap_table_init(&t);
+    smartcap_score_params_t sp;
+    smartcap_score_params_default(&sp);
+    smartcap_fsm_params_t fp;
+    smartcap_fsm_params_default(&fp);
+
+    // No clients, no PMKID flag -> SMCAP_STRATEGY_PASSIVE.
+    uint8_t ap[6];
+    setMac(ap, 0x43, 0x43, 0x43);
+    pushAp(&r, ap, 11, -50, "P", 0);
+
+    smartcap_fsm_t f = makeEmptyFsm(&r, &t, &sp, &fp);
+    resetLog();
+
+    smartcap_fsm_tick(&f, 0);
+    smartcap_fsm_tick(&f, 1000);
+    smartcap_fsm_tick(&f, 2000);
+    smartcap_fsm_tick(&f, 3000); // RESCORE -> FOCUS -> ATTACK (passive) -> LISTEN
+    CHECK(smartcap_fsm_stage(&f) == SMCAP_STAGE_LISTEN, "passive target listened to");
+
+    smartcap_target_t *tp = smartcap_table_find(&t, ap);
+    CHECK(tp && tp->attack_count == 0, "no failure recorded before the timeout");
+
+    smartcap_fsm_tick(&f, 7000); // listen deadline -> COOLDOWN with a penalty
+    CHECK(smartcap_fsm_stage(&f) == SMCAP_STAGE_COOLDOWN, "passive timeout -> cooldown");
+    CHECK(tp && tp->attack_count == 1 && tp->consecutive_failures == 1,
+          "passive timeout counts as a failure for scoring");
+}
+
 int main(void) {
     printf("SmartCap radio + FSM host test\n");
     testAdapterGating();
@@ -1132,6 +1210,8 @@ int main(void) {
     testExclusionFromRotation();
     testExclusionExpiryReturns();
     testExclusionPassiveCapture();
+    testFsForcedRescan();
+    testFsPassivePenalty();
     printf("\n%d checks, %d failed\n", g_checks, g_failed);
     return g_failed == 0 ? 0 : 1;
 }

@@ -1,16 +1,14 @@
-// main - настройки имени, языка, белого списка сетей что не атакуются, включение pwngrid и gps.
-// version - версия конфига; при несовпадении с версией прошивки конфиг перезаписывается с теми же настройками
 {
+  "_comment": "main - настройки имени, языка, белого списка сетей что не атакуются, включение pwngrid и gps; version - версия конфига; при несовпадении с версией прошивки конфиг перезаписывается с теми же настройками",
   "main": {
     "name": "pentagotchi",
     "lang": "en",
-    "version": "0.1.0",
-    "whitelist": [
-    ],
+    "version": "0.1.1",
+    "whitelist": [],
     "grid": { "enabled": true },
     "gps": { "enabled": false }
   },
-// настройки пользовательского интерфейса. rotation - поворот дисплея, type - тип дисплея, color - цвет текста, web - веб интерфейс
+  "_ui_comment": "настройки пользовательского интерфейса. rotation - поворот дисплея, type - тип дисплея, color - цвет текста, web - веб интерфейс",
   "ui": {
     "display": {
       "enabled": true,
@@ -22,19 +20,18 @@
       "enabled": false,
       "address": "192.168.4.1",
       "username": "admin",
-      "password": "pentagotchi",
+      "password": "pentagotchi"
     }
   },
-// настройки AI. enabled - включить или выключить AI, laziness - лень AI, epochs_per_episode - количество эпох за эпизод, min_rssi - минимальный RSSI для захвата хэндшейка
-// ии пока не добавлен в прошивку но планируетя в будущем
+  "_ai_comment": "настройки AI. enabled - включить или выключить AI, laziness - лень AI, epochs_per_episode - количество эпох за эпизод, min_rssi - минимальный RSSI для захвата хэндшейка. ИИ пока не добавлен в прошивку, но планируется в будущем",
   "ai": {
     "enabled": false,
     "laziness": 0.5,
     "epochs_per_episode": 1,
     "min_rssi": -75
   },
-// настройки движка который ловит хэндшейки
+  "_pwny_comment": "настройки движка, который ловит хэндшейки",
   "pwny": {
-    "deauth_enabled": true,
+    "deauth_enabled": true
   }
 }

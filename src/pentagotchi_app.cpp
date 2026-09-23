@@ -5,6 +5,7 @@
 #include "pentagotchi_gps.h"
 #include "pentagotchi_internal.h"
 #include "pentagotchi_plugins.h"
+#include "pentagotchi_web.h"
 
 #include <esp_log.h>
 #include <esp_random.h>
@@ -99,6 +100,12 @@ void PentagotchiApp::begin() {
     }
 
     initWifi();
+
+    // Web UI (SoftAP + http server), toggled by ui.web.enabled (default off).
+    if (config_.web.enabled) {
+        pentagotchi_web_start(&config_);
+    }
+
     gPlugins.begin();
     pwn_events_raise_simple(PWN_EVENT_BOOT);
     lastCycleTs = millis();
