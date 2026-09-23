@@ -21,9 +21,10 @@ static GxEPD2_213_GDEY0213B74 *s_display = nullptr;
 static SPIClass *s_spi = nullptr;
 static int s_rotation = 0;
 static bool s_invert = false;
-static int64_t s_last_full_refresh_us = 0;
+static uint32_t s_last_full_refresh_ms = 0; // millis() of the last full refresh
+static bool s_full_refresh_done = false;    // at least one full refresh happened
 static int64_t s_last_refresh_us = 0;
-static uint32_t s_full_refresh_interval_sec = 600;
+static uint32_t s_full_refresh_interval_sec = 1800; // 30 min (matches kFullRefreshIntervalS)
 
 // u8g2 framebuffer 250x122 (user space)
 u8g2_t g_u8g2;
@@ -187,24 +188,26 @@ void eink_deinit(void)
 
 // ========== Управление режимом обновления ==========
 
+// Full-refresh scheduling runs on millis() like the rest of the app. Each
+// tick after the interval has elapsed requests another full refresh, so the
+// anti-ghosting pass repeats every interval, not just once after boot.
 void eink_set_full_refresh_interval(uint32_t seconds) {
     s_full_refresh_interval_sec = seconds;
     ESP_LOGI(TAG, "Full refresh interval set to %lu seconds", (unsigned long)seconds);
 }
 
 bool eink_should_do_full_refresh(void) {
-    if (s_last_full_refresh_us == 0) {
-        return true;
+    if (!s_full_refresh_done) {
+        return true; // first full refresh right after boot
     }
-
-    int64_t now_us = esp_timer_get_time();
-    int64_t elapsed_sec = (now_us - s_last_full_refresh_us) / 1000000;
-
-    return elapsed_sec >= s_full_refresh_interval_sec;
+    uint32_t now_ms = millis();
+    uint32_t interval_ms = s_full_refresh_interval_sec * 1000UL;
+    return (now_ms - s_last_full_refresh_ms) >= interval_ms; // wraps safely
 }
 
 void eink_mark_full_refresh_done(void) {
-    s_last_full_refresh_us = esp_timer_get_time();
+    s_full_refresh_done = true;
+    s_last_full_refresh_ms = millis();
     ESP_LOGD(TAG, "Full refresh timestamp updated");
 }
 

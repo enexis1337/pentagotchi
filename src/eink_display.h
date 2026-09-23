@@ -25,9 +25,9 @@ void eink_deinit(void);
 esp_err_t eink_set_invert(bool invert);
 
 // Управление режимом обновления
-void eink_set_full_refresh_interval(uint32_t seconds);  // Установить интервал full refresh (по умолчанию 600 сек = 10 мин)
-bool eink_should_do_full_refresh(void);  // Проверить, нужен ли full refresh
-void eink_mark_full_refresh_done(void);  // Отметить что full refresh выполнен
+void eink_set_full_refresh_interval(uint32_t seconds);  // Задать интервал full refresh (по умолчанию 1800 сек = 30 мин)
+bool eink_should_do_full_refresh(void);  // True: пора делать full refresh (первый тик + каждые interval)
+void eink_mark_full_refresh_done(void);  // Отметить, что full refresh выполнен
 
 // C++ wrapper class for compatibility with existing code
 class EInkDisplay {
