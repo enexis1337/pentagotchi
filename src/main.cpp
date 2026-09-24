@@ -8,7 +8,7 @@
 // pentagotchi_config.h). Stored as "main.version" in /config.json; when the
 // stored config version differs, pentagotchi_config_load() re-saves the
 // config with this version, keeping the user's settings intact.
-const char kFirmwareVersion[] = "0.1.1";
+const char kFirmwareVersion[] = "0.1.2";
 
 EInkDisplay display;
 PentagotchiApp app(display);

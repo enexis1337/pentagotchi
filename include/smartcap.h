@@ -21,6 +21,7 @@ typedef struct {
     int16_t rssi_floor;      // dBm: at/under this the term contributes 0
     int16_t rssi_ref;        // dBm: at this the term reaches rssi_weight
     int16_t rssi_weight;     // max points the RSSI term can contribute
+    int16_t capture_min_rssi; // dBm: minimum RSSI for focus, -127 disables gate
 
     int16_t novelty_bonus;   // one-shot bonus while attack_count == 0
     int16_t pmkid_bonus;     // target accepts the silent assoc/PMKID method

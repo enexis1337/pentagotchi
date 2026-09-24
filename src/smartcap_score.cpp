@@ -11,6 +11,7 @@ void smartcap_score_params_default(smartcap_score_params_t *p) {
     p->rssi_floor = -92;
     p->rssi_ref = -40;
     p->rssi_weight = 30;
+    p->capture_min_rssi = -127;
     p->novelty_bonus = 12;
     p->pmkid_bonus = 15;
     // Per consecutive failure. With cap=5 and window=60s, one failure costs ~60

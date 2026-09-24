@@ -83,6 +83,10 @@ uint8_t smartcap_focus_build(smartcap_table_t *t,
         }
 
         e->score = smartcap_score(p, e, now_ms);
+        if (p->capture_min_rssi != -127 && e->rssi != -127 &&
+            e->rssi < p->capture_min_rssi) {
+            continue;
+        }
         if (e->score > 0) {
             cand[nc++] = e;
         }

@@ -9,6 +9,8 @@ extern "C" {
 #endif
 
 #define PWN_CONFIG_MAX_WHITELIST 16
+#define PWN_CONFIG_MAX_WHITELIST_SSID 16
+#define PWN_CONFIG_SSID_MAX 33
 
 // Settings loaded from /config.json on the SD card.
 // All fields have safe defaults; a config file is optional.
@@ -18,6 +20,8 @@ typedef struct {
     char lang[8];
     uint8_t whitelist[PWN_CONFIG_MAX_WHITELIST][6]; // MACs not attacked
     uint8_t whitelist_count;
+    char ssid_whitelist[PWN_CONFIG_MAX_WHITELIST_SSID][PWN_CONFIG_SSID_MAX];
+    uint8_t ssid_whitelist_count;
     bool grid_enabled;   // pwngrid mesh on/off (default on)
     bool gps_enabled;    // GPS module on/off (default off)
 
@@ -34,14 +38,6 @@ typedef struct {
         char username[24];
         char password[32];
     } web;
-
-    // --- ai ---
-    struct {
-        bool enabled;
-        float laziness;
-        uint8_t epochs_per_episode;
-        int16_t min_rssi;
-    } ai;
 
     // --- pwny ---
     bool deauth_enabled;

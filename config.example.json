@@ -3,8 +3,9 @@
   "main": {
     "name": "pentagotchi",
     "lang": "en",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "whitelist": [],
+    "whitelist_ssid": "",
     "grid": { "enabled": true },
     "gps": { "enabled": false }
   },
@@ -22,13 +23,6 @@
       "username": "admin",
       "password": "pentagotchi"
     }
-  },
-  "_ai_comment": "настройки AI. enabled - включить или выключить AI, laziness - лень AI, epochs_per_episode - количество эпох за эпизод, min_rssi - минимальный RSSI для захвата хэндшейка. ИИ пока не добавлен в прошивку, но планируется в будущем",
-  "ai": {
-    "enabled": false,
-    "laziness": 0.5,
-    "epochs_per_episode": 1,
-    "min_rssi": -75
   },
   "_pwny_comment": "настройки движка, который ловит хэндшейки",
   "pwny": {

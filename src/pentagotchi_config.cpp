@@ -67,11 +67,6 @@ void pentagotchi_config_set_defaults(pentagotchi_config_t *cfg) {
     strncpy(cfg->web.password, "pentagotchi", sizeof(cfg->web.password) - 1);
     cfg->web.password[sizeof(cfg->web.password) - 1] = '\0';
 
-    cfg->ai.enabled = false;
-    cfg->ai.laziness = 0.5f;
-    cfg->ai.epochs_per_episode = 1;
-    cfg->ai.min_rssi = -75;
-
     cfg->deauth_enabled = true;
     cfg->serial = false;
 }
@@ -84,6 +79,34 @@ static void parse_whitelist(pentagotchi_config_t *cfg, const JsonObject &main) {
         const char *mac = v.as<const char *>();
         if (mac && parse_mac(mac, cfg->whitelist[cfg->whitelist_count])) {
             ++cfg->whitelist_count;
+        }
+    }
+}
+
+static void add_ssid_whitelist(pentagotchi_config_t *cfg, const char *value) {
+    if (!value || !value[0] || cfg->ssid_whitelist_count >= PWN_CONFIG_MAX_WHITELIST_SSID) { return; }
+    copy_string(value, cfg->ssid_whitelist[cfg->ssid_whitelist_count++], PWN_CONFIG_SSID_MAX);
+}
+
+static void parse_ssid_whitelist(pentagotchi_config_t *cfg, const JsonObject &main) {
+    cfg->ssid_whitelist_count = 0;
+    JsonVariant value = main["whitelist_ssid"];
+    if (value.is<const char *>()) {
+        String list = value.as<const char *>();
+        size_t start = 0;
+        while (start <= list.length() && cfg->ssid_whitelist_count < PWN_CONFIG_MAX_WHITELIST_SSID) {
+            size_t end = list.indexOf(',', start);
+            if (end < 0) { end = list.length(); }
+            String ssid = list.substring(start, end);
+            ssid.trim();
+            if (ssid.length() > 0) { add_ssid_whitelist(cfg, ssid.c_str()); }
+            if (end == list.length()) { break; }
+            start = end + 1;
+        }
+    } else if (value.is<JsonArray>()) {
+        for (JsonVariant v : value.as<JsonArray>()) {
+            const char *ssid = v.as<const char *>();
+            if (ssid) { add_ssid_whitelist(cfg, ssid); }
         }
     }
 }
@@ -123,6 +146,7 @@ bool pentagotchi_config_load(pentagotchi_config_t *cfg, bool sd_ready) {
         copy_string(main_["name"] | cfg->name, cfg->name, sizeof(cfg->name));
         copy_string(main_["lang"] | cfg->lang, cfg->lang, sizeof(cfg->lang));
         parse_whitelist(cfg, main_);
+        parse_ssid_whitelist(cfg, main_);
         cfg->grid_enabled = main_["grid"]["enabled"] | cfg->grid_enabled;
         cfg->gps_enabled = main_["gps"]["enabled"] | cfg->gps_enabled;
     }
@@ -144,14 +168,6 @@ bool pentagotchi_config_load(pentagotchi_config_t *cfg, bool sd_ready) {
             copy_string(web["username"] | cfg->web.username, cfg->web.username, sizeof(cfg->web.username));
             copy_string(web["password"] | cfg->web.password, cfg->web.password, sizeof(cfg->web.password));
         }
-    }
-
-    if (doc["ai"].is<JsonObject>()) {
-        JsonObject ai = doc["ai"];
-        cfg->ai.enabled = ai["enabled"] | cfg->ai.enabled;
-        cfg->ai.laziness = ai["laziness"] | cfg->ai.laziness;
-        cfg->ai.epochs_per_episode = ai["epochs_per_episode"] | cfg->ai.epochs_per_episode;
-        cfg->ai.min_rssi = ai["min_rssi"] | cfg->ai.min_rssi;
     }
 
     if (doc["pwny"].is<JsonObject>()) {
@@ -202,6 +218,12 @@ bool pentagotchi_config_save(const pentagotchi_config_t *cfg, bool sd_ready) {
                  cfg->whitelist[i][3], cfg->whitelist[i][4], cfg->whitelist[i][5]);
         whitelist.add(mac);
     }
+    String ssidList;
+    for (uint8_t i = 0; i < cfg->ssid_whitelist_count; ++i) {
+        if (i > 0) { ssidList += ','; }
+        ssidList += cfg->ssid_whitelist[i];
+    }
+    main_["whitelist_ssid"] = ssidList;
     main_["grid"]["enabled"] = cfg->grid_enabled;
     main_["gps"]["enabled"] = cfg->gps_enabled;
 
@@ -216,12 +238,6 @@ bool pentagotchi_config_save(const pentagotchi_config_t *cfg, bool sd_ready) {
     web["address"] = cfg->web.address;
     web["username"] = cfg->web.username;
     web["password"] = cfg->web.password;
-
-    JsonObject ai = doc["ai"].to<JsonObject>();
-    ai["enabled"] = cfg->ai.enabled;
-    ai["laziness"] = cfg->ai.laziness;
-    ai["epochs_per_episode"] = cfg->ai.epochs_per_episode;
-    ai["min_rssi"] = cfg->ai.min_rssi;
 
     JsonObject pwny = doc["pwny"].to<JsonObject>();
     pwny["deauth_enabled"] = cfg->deauth_enabled;

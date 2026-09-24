@@ -246,6 +246,28 @@ static void testFocus(void) {
           "score desc within a channel");
 }
 
+static void testCaptureMinRssi(void) {
+    printf("capture RSSI gate:\n");
+    smartcap_table_t T;
+    smartcap_table_init(&T);
+    smartcap_score_params_t p;
+    smartcap_score_params_default(&p);
+    p.capture_min_rssi = -60;
+
+    uint8_t bssid[6];
+    setMac(bssid, 0x11, 0x22, 0x33);
+    smartcap_target_t *e = smartcap_table_upsert(&T, bssid);
+    e->rssi = -70;
+    e->last_seen_ms = 1000;
+
+    smartcap_focus_t f;
+    CHECK(smartcap_focus_build(&T, &p, 1000, &f, nullptr, nullptr) == 0,
+          "target below capture_min_rssi is excluded");
+    e->rssi = -55;
+    CHECK(smartcap_focus_build(&T, &p, 1000, &f, nullptr, nullptr) == 1,
+          "target at capture_min_rssi is eligible");
+}
+
 static void testStrategy(void) {
     printf("strategy picker:\n");
     smartcap_target_t t;
@@ -274,6 +296,7 @@ int main(void) {
     testSmoothed();
     testTable();
     testFocus();
+    testCaptureMinRssi();
     testStrategy();
     printf("\n%d checks, %d failed\n", g_checks, g_failed);
     return g_failed == 0 ? 0 : 1;

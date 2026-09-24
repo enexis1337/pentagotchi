@@ -66,6 +66,11 @@ bool serviceRadioGate(const smartcap_radio_event_t *ev, void *ctx) {
             return false;
         }
     }
+    for (uint8_t w = 0; w < cfg.ssid_whitelist_count; ++w) {
+        if (ev->ssid[0] != '\0' && strcmp(cfg.ssid_whitelist[w], ev->ssid) == 0) {
+            return false;
+        }
+    }
     return true;
 }
 
